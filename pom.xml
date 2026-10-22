@@ -67,6 +67,7 @@
         <module>z-dms-core</module>
         <module>z-dms-spring-boot-starter</module>
         <module>z-dms-demo-host</module>
+        <module>z-dms-admin</module>
     </modules>
 
     <properties>

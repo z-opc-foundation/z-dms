@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  z-dms 形态 B（组织级 web 管控）宿主的日志配置（log4j2 binding）。
+
+  ⚠️ 为什么显式带 log4j2：z-boot-parent 链上把 logback 排除了（组织口径走 log4j2），
+  宿主不自带 binding 的话 slf4j 会落到 NOP —— z-dms 的「探活失败打 ERROR 日志」就静默了。
+  根级别 info：让「登记成功 / 探活失败 / 换绑关旧池 / 审计写失败」这几条都能在日志里看见。
+-->
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="com.zifang.z.dms" level="info" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

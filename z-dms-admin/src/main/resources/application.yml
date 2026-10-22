@@ -1,0 +1,65 @@
+# =====================================================================================
+# z-dms 形态 B（组织级 web 管控）宿主配置
+#
+# ⚠️ 凭据纪律：本文件里**没有任何明文口令**。
+#   * 元数据库口令：z.base.db.dms.password ← 环境变量 ZDMS_META_DB_PASSWORD（无默认值 ⇒ 缺了就启动失败，不静默兜底）
+#   * 被管数据源的凭据：不在本文件里，只留 credentialRef 指向的键名；
+#     键名对应的内容由环境变量 ZDMS_DEMO_CREDENTIAL 注入（JSON：{"username":"...","password":"..."}）
+#   * 界面上的凭据面只有 credentialRef 下拉选择器（z.dms.admin.credential-refs）——
+#     **没有任何口令输入框**，口令永远不进浏览器。
+# =====================================================================================
+
+server:
+  port: ${ZDMS_ADMIN_PORT:18098}
+
+spring:
+  application:
+    name: z-dms-admin
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+z:
+  base:
+    db:
+      # 元数据库（数据源定义 + 变更流水 + 使用流水的存储）：键名 z.base.db.dms.*
+      dms:
+        host: ${ZDMS_META_DB_HOST:127.0.0.1}
+        port: ${ZDMS_META_DB_PORT:33307}
+        database: ${ZDMS_META_DB_NAME:oc}
+        username: ${ZDMS_META_DB_USERNAME:root}
+        password: ${ZDMS_META_DB_PASSWORD}
+  dms:
+    enabled: true
+    # 登记落库 + 审计落库（表结构见 _doc/004_sql/）
+    store-enabled: true
+    # 定时探活间隔（列表页的健康态另有「当场探活」，这里是后台巡检）
+    probe-interval-ms: 30000
+    # 单池探活超时
+    probe-timeout-ms: 3000
+    admin:
+      # 操作人取自这个请求头（网关 / SSO 写登录用户）
+      operator-header: X-Operator
+      # 界面凭据选择器的候选清单（引用名，不是口令）
+      credential-refs:
+        - ${ZDMS_CREDENTIAL_REF:dms-demo/mysql-main}
+    # 凭据解析走 Environment（离线自检口径；生产走 z-mist：z.dms.mist.enabled=true）
+    credential:
+      dms-demo:
+        mysql-main: ${ZDMS_DEMO_CREDENTIAL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.zifang.z.dms: INFO
+    org.springframework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

@@ -1,0 +1,29 @@
+{
+  "name": "@yuku123/z-dms-suit",
+  "version": "1.0.0",
+  "description": "z-dms admin 控制台 SPA（组织级 web 管控：数据源登记 / 测连接 / 变更历史 / 审计流水）",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@yuku123/z-frontend-common": "^1.0.0",
+    "antd": "^6.3.3",
+    "dayjs": "^1.11.10",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.18.4",
+    "axios": "^1.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "~5.6.3",
+    "vite": "^6.2.0"
+  }
+}

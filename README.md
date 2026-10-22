@@ -40,8 +40,12 @@
 
 z-dms 就是给第 1、3 套收口的底座 —— **一个 core 两种暴露**：
 
-- **形态 A（嵌入式 starter）**：宿主一行依赖引入即用 —— **本仓当前交付的是形态 A**；
-- **形态 B（组织级 web 管控）**：admin + `_frontend`，集中登记/测连接/授权/审计/变更历史 —— **是 `TASK-20261012-012`，本仓不做**。
+- **形态 A（嵌入式 starter）**：宿主一行依赖引入即用；
+- **形态 B（组织级 web 管控）**：admin + `_frontend`，集中登记/测连接/授权/审计/变更历史
+  —— **已交付（`TASK-20261012-012`，见下文「形态 B」）**。
+
+> 两种形态**共用同一份 `z-dms-core`**（不是两份代码）：形态 A 的宿主与形态 B 的管控台
+> 建池、探活、换绑、落库走的都是 core 里那套 `DataSourceService`。
 
 ---
 
@@ -55,10 +59,15 @@ z-dms/
 │   ├── 001_arch/00-overview.md      # 架构总览
 │   └── 004_sql/                     # DDL（幂等脚本）
 │       ├── V1__z_dms_datasource_def.sql
-│       └── V2__z_dms_datasource_change_log.sql
+│       ├── V2__z_dms_datasource_change_log.sql
+│       ├── V3__z_dms_datasource_change_log_values.sql   # 变更流水补「前后值」两列（幂等 ALTER）
+│       └── V4__z_dms_datasource_usage_log.sql            # 使用流水（审计面的另一半）
 ├── z-dms-core/                      # 核心：模型 + 存储表 + 连接工厂 + 探活 + 变更事件（纯 Java 8）
 ├── z-dms-spring-boot-starter/       # 形态 A：自动装配（宿主一行依赖引入即用）
-└── z-dms-demo-host/                 # 宿主样例（证明「一行依赖引入宿主」这件事本身可跑）
+├── z-dms-demo-host/                 # 宿主样例（证明「一行依赖引入宿主」这件事本身可跑）
+├── z-dms-admin/                     # 形态 B：组织级 web 管控宿主（登记/测连接/变更历史/审计流水）
+└── _frontend/
+    └── z-dms-suit/                  # 形态 B 控制台 SPA（React 19 + antd 6 + vite 6 + @yuku123/z-frontend-common）
 ```
 
 ### `z-dms-core` 的包面
@@ -199,13 +208,97 @@ try (Connection conn = dataSourceService.require("ds-main").getConnection()) {
 | 表 | 用途 |
 |---|---|
 | `z_dms_datasource_def` | 数据源定义（id / name / type / credential_ref / properties(JSON) / created_at / updated_at） |
-| `z_dms_datasource_change_log` | 变更流水（形态 B 审计面；形态 A 只写不改） |
+| `z_dms_datasource_change_log` | 变更流水（形态 B 审计面 · V3 补了 `before_value` / `after_value` 两个前后值快照列） |
+| `z_dms_datasource_usage_log` | 使用流水（形态 B 审计面 · 谁在什么时候用了哪个数据源） |
 
-DDL 在 `_doc/004_sql/`，**幂等**（`CREATE TABLE IF NOT EXISTS`）：执行两遍无报错。
+DDL 在 `_doc/004_sql/`，**幂等**（`CREATE TABLE IF NOT EXISTS`；V3 对旧表用
+`information_schema` 判列存在再 `PREPARE` 动态 ALTER）：执行两遍无报错。
 
 ---
 
-## 🧾 本轮验收（`TASK-20261012-011`）
+## 🖥️ 形态 B（组织级 web 管控 · `z-dms-admin` + `_frontend/z-dms-suit`）
+
+> 「组织级」的意思是：**一屏看清全组织登记了哪些数据源、每个健康态如何、谁改过、谁用过**。
+> 它与形态 A 共用 `z-dms-core`（**不是两份代码**）：建池 / 探活 / 换绑 / 落库都走 core 的
+> `DataSourceService`，管控台只提供「管控面」。
+
+### 启动与构建
+
+```bash
+# 后端（形态 B 宿主）
+cd z-dms-admin && mvn -o clean install
+java -jar z-dms-admin/target/z-dms-admin-1.0.0-exec.jar
+#   端口 z.dms.admin / ZDMS_ADMIN_PORT（默认 18098）
+
+# 前端（控制台 SPA）
+cd _frontend/z-dms-suit && npm install && npm run build
+#   产物 dist/ 由 z-dms-admin 的 maven-resources-plugin 拷进 jar 的 BOOT-INF/classes/static/
+#   ⇒ java -jar 单容器即带控制台（Mode 1 合体）
+```
+
+### 登记字段口径
+
+| 字段 | 含义 | 约束 |
+|---|---|---|
+| `id` | 数据源稳定标识 | 必填；建后不可改；删除后不复用 |
+| `name` | 展示名 | 必填 |
+| `type` | `JDBC` / `MEMORY` / `CSV` / `HTTP` / `SQL` | **当前只有 JDBC 的连接工厂落地**，其余类型在界面上置灰 |
+| `credentialRef` | 凭据引用（`<group>/<key>`，指向 z-mist 键名） | JDBC 必填；**界面上只有这一个下拉选择器，没有口令输入框** |
+| `properties` | 非敏感连接属性（host / port / database / 池参数…） | 出现敏感键 ⇒ **写入口直接拒绝**（`DataSourceDefValidator`，不静默丢弃，报错只列键名不带值） |
+
+### 测连接语义（**真发起连接，不是回固定值**）
+
+| 端点 | 语义 |
+|---|---|
+| `POST /api/dms/sources/{id}/test-connection` | 走已登记的池借一次连接跑 `SELECT 1`；回执带 `up` / `detail` / `latencyMs` / `target` |
+| `POST /api/dms/sources/test-connection` | 登记表单里的「自测」：现场建一个**临时池** → 真探一次 → 立刻关掉（不登记进注册中心） |
+| `POST /api/dms/sources/{id}/acquire` | 真取一次连接跑一条 `SELECT`，并写一条**使用流水** |
+
+失败时 `detail` 带**根因**（`ConnectException: Connection refused` / `Access denied` …），
+不是一句「失败」；列表页的健康态是**当场探出来的**，不是缓存里的旧结论。
+
+### 审计流水范围（**变更与使用都留痕**）
+
+| 类别 | 表 | 内容 |
+|---|---|---|
+| 变更 `CHANGE` | `z_dms_datasource_change_log` | 谁、何时、把哪个源**从什么改成了什么**（`before_value` / `after_value` 两个定义快照 JSON；新增时前值为空，删除时后值为空） |
+| 使用 `USAGE` | `z_dms_datasource_usage_log` | 谁、何时、**用了哪个数据源**、动作（测连接 / 取连接）、成功与否、耗时、结论 |
+
+- 操作人取自请求头 `X-Operator`（生产由平台 SSO / 网关下发；缺失时记 `anonymous`，
+  **不猜、不编**）；
+- 两类流水在界面上合成一条时间轴（`GET /api/dms/audit`），变更历史单独看
+  （`GET /api/dms/changes`）；
+- 快照里**只有 credentialRef 与非敏感属性**，敏感键一律打码成 `***`（纵深防御）。
+
+### API 一览
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| GET | `/api/dms/sources` | 一屏：全部登记数据源 + 各自健康态 |
+| POST | `/api/dms/sources` | 登记（注册即探活） |
+| PUT | `/api/dms/sources/{id}` | 修改（换绑：旧池显式关闭，新池重新探活） |
+| DELETE | `/api/dms/sources/{id}` | 摘除（未登记 ⇒ 报错，不静默成功） |
+| POST | `/api/dms/sources/{id}/test-connection` | 测连接（真发起） |
+| POST | `/api/dms/sources/test-connection` | 测连接（未登记的候选） |
+| POST | `/api/dms/sources/{id}/acquire` | 取连接（产生使用流水） |
+| GET | `/api/dms/changes` | 变更历史（含前后值快照） |
+| GET | `/api/dms/audit` | 审计流水（变更 + 使用） |
+| GET | `/api/dms/credential-refs` | 凭据引用目录（界面下拉候选；**只有引用名，没有口令**） |
+
+返回体统一 `{code, data, message}`（`code=200` 成功）。
+
+### 凭据纪律在界面上的落点
+
+- **界面全链路没有口令输入框**：登记 / 编辑 / 自测 / 身份页，渲染后 `input[type=password]`
+  恒为 0（源码扫描 + DOM 级渲染复验双重证据，见 `TASK-20261012-012` 证据）；
+- 凭据面只有 `credentialRef` 下拉选择器；口令由 z-mist 按引用取出，只在服务端内存里
+  拼进连接参数；
+- 仓内守卫（会红）：`z-dms-admin` 的 `DataSourceFormNoPasswordTest`（入参 DTO 无口令字段）、
+  `NoPlaintextPasswordInputTest`（前端源码无口令输入框）、`ChangeSnapshotTest`（快照打码）。
+
+---
+
+## 🧾 本轮验收（`TASK-20261012-011` · 形态 A）
 
 | 验收项 | 结论 | 证据 |
 |---|---|---|
@@ -213,6 +306,15 @@ DDL 在 `_doc/004_sql/`，**幂等**（`CREATE TABLE IF NOT EXISTS`）：执行�
 | 2. 探活失败在宿主 `/health` 或日志可见（不静默） | ✅ 达成 | `acceptance-2-probe-failure-visible.log`（故意连不通的源：`/health` DOWN + actuator 503 + ERROR 日志 + 直连根因） |
 | 3. 全链路 grep 零明文口令；`credentialRef` 指向 z-mist 键名 | ✅ 达成 | `acceptance-3-no-plaintext-credential.log`（扫描器零命中；口令字面量逐字节搜 0 处；表里无口令列） |
 | 4. DDL 在 `oc` 库执行两遍无报错 | ✅ 达成 | `ddl-twice-on-oc.log`（真 MySQL 8.0.46，四个脚本两遍各 `exit=0`） |
+
+## 🧾 本轮验收（`TASK-20261012-012` · 形态 B）
+
+| 验收项 | 结论 | 证据 |
+|---|---|---|
+| 1. 一屏看到全部登记数据源与各自健康态；测连接按钮真实发起连接 | ✅ 达成 | lead 仓 `evidence/TASK-20261012-012/acceptance-run.log`（三个源逐行健康态 UP/DOWN/UP；测连接回执带真实耗时与根因） |
+| 2. 变更历史可回看每一次修改的前后值；审计流水含使用记录 | ✅ 达成 | 同上（`before_value`/`after_value` 快照对照 + `USAGE` 使用流水含操作人/耗时） |
+| 3. 界面全链路无明文口令输入框（只有 credentialRef 选择器） | ✅ 达成 | `scan-no-plaintext-password.log`（源码扫描 0 命中）+ `dom-no-password-input.log`（6 个渲染面 `input[type=password]` 合计 0） |
+| 4. `_frontend` 生产构建通过 | ✅ 达成 | `frontend-build.log`（`tsc --noEmit && vite build` ⇒ `✓ built in 1.98s`） |
 
 ---
 
@@ -233,6 +335,8 @@ git push -u origin main
 mvn -Pcentral deploy
 #    判据：central.sonatype.com 上能看到 z-dms / -core / -spring-boot-starter 的发布记录
 #    ⚠️ 本轮**不发**：发中央属对外动作，需人工授权
+#    注：z-dms-admin 是 standalone 宿主（不上中央），与 z-ctc-admin 同款口径
+#        （maven.deploy.skip=true / exec.jar classifier）
 
 # 4) 接真实 z-mist（生产口径的凭据解析）
 #    宿主配置：z.dms.mist.enabled=true + z.dms.mist.host/port/app-name/app-secret/namespace
@@ -245,6 +349,6 @@ mvn -Pcentral deploy
 ## 📚 相关卡与文档
 
 - `TASK-20261012-009` —— 数据源三套事实现读盘点（本仓的口径来源，lead 仓 `002_项目需求/001_特性需求/008_数据集成_z-dms_与_z-etl/notes.md`）
-- `TASK-20261012-012` —— 形态 B 组织级 web 管控（**本仓不做**）
+- `TASK-20261012-012` —— 形态 B 组织级 web 管控（**本仓已交付**：`z-dms-admin` + `_frontend/z-dms-suit`）
 - `TASK-20261012-013` —— z-etl 仓骨架（z-dms 的第一个重度消费者）
 - 需求 008 —— 数据集成域总纲（lead 仓 `002_项目需求/001_特性需求/008_数据集成_z-dms_与_z-etl/`）

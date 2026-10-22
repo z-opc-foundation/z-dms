@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-dms</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>z-dms-admin</artifactId>
+    <name>z-dms-admin</name>
+    <packaging>jar</packaging>
+
+    <description>形态 B 组织级 web 管控宿主：数据源登记 / 测连接 / 变更历史 / 审计流水（复用 z-dms-core 与 starter，不复制一份 core）</description>
+
+    <properties>
+        <!--
+            admin 是 standalone 宿主（自带控制台 SPA + exec.jar），**永远不上 Maven Central**
+            —— 与 z-ctc-admin / z-surl-admin 同款口径（lead 005 §2）。
+            留在 reactor 里只是为了让 `mvn -pl z-dms-admin -am package` 能一把构建。
+        -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <dependencies>
+        <!--
+            ★ 形态 B 复用形态 A 的底座：admin 只做「web 管控面」，
+              登记 / 建池 / 探活 / 存储全部走 starter 装出来的 DataSourceService
+              ⇒ 形态 A 与形态 B **共用同一份 z-dms-core**，不是两份代码。
+        -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-dms-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- MySQL 驱动（被管数据源与元数据库都是 MySQL）。 -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+        </dependency>
+        <!-- SLF4J binding：组织口径走 log4j2；不带 binding 则探活失败日志不会打出来。 -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.25.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                前端产物注入（Mode 1 合体）：把 _frontend/z-dms-suit/dist 拷进 jar 的
+                BOOT-INF/classes/static/，java -jar 单容器即带控制台。
+
+                【为什么这里没有 frontend-maven-plugin】
+                z-surl-admin / z-ctc-admin 用 frontend-maven-plugin 在默认构建里跑 npm build。
+                本仓照抄那套会让 **maven 构建依赖外网下载 node 发行包**，
+                而 z-dms 仓的构建口径是离线可解析（parent 与依赖都已在本地 .m2 里）——
+                为了让形态 B 的后端能离线编译，前端构建拆成显式一步：
+                    cd _frontend/z-dms-suit && npm install && npm run build
+                产物 dist/ 由下面这条 resources 规则拷进 jar（dist 不存在时跳过，不阻断后端构建）。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-frontend-dist</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <overwrite>true</overwrite>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/../_frontend/z-dms-suit/dist</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <configuration>
+                    <mainClass>com.zifang.z.dms.admin.ZDmsAdminApplication</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
