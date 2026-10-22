@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        z-dms —— 数据源管控底座仓（双形态：DMS = DataSource Management System）。
+
+        工程形状照抄 z-etl（同批人同套方式新建的兄弟仓，2026-10-22 TASK-20261012-011）：
+          parent = io.github.yuku123:z-boot-parent:1.1.0（第三方地板与兄弟仓权威表由父链直供）
+          版本   = CI-friendly ${revision} + flatten-maven-plugin(oss)
+          发版   = -Pcentral 手动激活（dormant，本轮不激活、不发中央）
+
+        groupId 口径与 z-etl / z-trade / z-config 一致：io.github.yuku123（中央发布 namespace）；
+        包名沿用组织惯例 com.zifang.z.dms.*（与 com.zifang.z.lc.report.*、com.zifang.z.etl.* 同格）。
+
+        模块：
+          z-dms-core               模型 + 存储表 + 连接工厂 + 探活 + 事件（纯 Java 8，不含 Spring 容器面）
+          z-dms-spring-boot-starter 形态 A 嵌入式暴露（宿主一行依赖引入即用）
+          z-dms-demo-host          宿主样例（证明「一行依赖引入宿主」这件事本身可跑）
+    -->
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-boot-parent</artifactId>
+        <version>1.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.github.yuku123</groupId>
+    <artifactId>z-dms</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>z-dms</name>
+    <description>数据源管控底座：DataSourceDef + credentialRef + Druid 连接工厂 + 定时探活 + z-config 推送</description>
+
+    <url>https://github.com/z-opc-foundation/z-dms</url>
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>yuku123</id>
+            <name>yuku123</name>
+            <email>1340947819@qq.com</email>
+            <organization>z-opc-foundation</organization>
+            <organizationUrl>https://github.com/z-opc-foundation</organizationUrl>
+            <timezone>+08:00</timezone>
+            <roles>
+                <role>owner</role>
+            </roles>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/z-opc-foundation/z-dms.git</connection>
+        <developerConnection>scm:git:git@github.com:z-opc-foundation/z-dms.git</developerConnection>
+        <url>https://github.com/z-opc-foundation/z-dms</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <modules>
+        <module>z-dms-core</module>
+        <module>z-dms-spring-boot-starter</module>
+        <module>z-dms-demo-host</module>
+    </modules>
+
+    <properties>
+        <!-- 项目自身版本(CI-friendly 根,发版改这一处)。首版号 = 1.0.0。 -->
+        <revision>1.0.0</revision>
+
+        <!-- 版本口径全部由 parent 下发(maven.compiler.source/target=8、UTF-8、
+             flatten-maven-plugin.version=1.7.3、maven-compiler-plugin.version=3.11.0)。
+             这里只留父链不供的键: -->
+        <compile.version>8</compile.version>
+        <maven-deploy-plugin.version>3.1.4</maven-deploy-plugin.version>
+        <maven-source-plugin.version>3.3.0</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
+        <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+        <central-publishing-plugin.version>0.8.0</central-publishing-plugin.version>
+        <versions-maven-plugin.version>2.17.1</versions-maven-plugin.version>
+        <h2.version>2.2.224</h2.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- 自家 reactor 坐标钉本仓版本(z-boot README「消费模型」步骤 4)。 -->
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-dms</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-dms-core</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-dms-spring-boot-starter</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- Druid / MySQL 驱动 / Jackson 的版本由 parent（z-boot-parent → spring-boot-dependencies）下发，
+                 这里不重复钉版本（DM 条目不带版本是非法的）。 -->
+            <!-- z-config 客户端（长连接推送通道）/ z-mist 客户端（凭据引用解析），
+                 均为 starter 的 optional 依赖：宿主不引就不进 classpath。 -->
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-config-client</artifactId>
+                <version>1.0.10</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-mist-client</artifactId>
+                <version>1.0.4</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- 全仓统一测试台(与 z-trade / z-etl 同款;版本由 floor/spring-boot junit-bom 下发)。 -->
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+                <configuration>
+                    <source>${compile.version}</source>
+                    <target>${compile.version}</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>${maven-deploy-plugin.version}</version>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+                <version>${versions-maven-plugin.version}</version>
+                <configuration>
+                    <generateBackupPoms>false</generateBackupPoms>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${flatten-maven-plugin.version}</version>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <!-- oss 模式:保留 Central 元数据、剥掉 <parent>/<dependencyManagement>/<build>。 -->
+                    <flattenMode>oss</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals><goal>flatten</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>flatten.clean</id>
+                        <phase>clean</phase>
+                        <goals><goal>clean</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- 发 Central 时 -Pcentral 手动激活(dormant 时零开销)。本仓本轮**不激活**该 profile。 -->
+    <profiles>
+        <profile>
+            <id>central</id>
+            <properties>
+                <maven.javadoc.skip>false</maven.javadoc.skip>
+                <central.gpg.skip>false</central.gpg.skip>
+            </properties>
+            <distributionManagement>
+                <repository>
+                    <id>central</id>
+                    <url>https://central.sonatype.com</url>
+                </repository>
+                <snapshotRepository>
+                    <id>central</id>
+                    <url>https://central.sonatype.com</url>
+                </snapshotRepository>
+            </distributionManagement>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-deploy-plugin</artifactId>
+                        <version>${maven-deploy-plugin.version}</version>
+                        <configuration><skip>true</skip></configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                            <failOnError>false</failOnError>
+                            <failOnWarnings>false</failOnWarnings>
+                            <quiet>true</quiet>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <phase>verify</phase>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <configuration>
+                            <skip>${central.gpg.skip}</skip>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                                <arg>--no-tty</arg>
+                            </gpgArguments>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <tokenAuth>true</tokenAuth>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>uploaded</waitUntil>
+                            <waitMaxTime>1800</waitMaxTime>
+                            <waitPollingInterval>10</waitPollingInterval>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

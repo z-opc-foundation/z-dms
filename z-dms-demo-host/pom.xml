@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-dms</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>z-dms-demo-host</artifactId>
+    <name>z-dms-demo-host</name>
+    <packaging>jar</packaging>
+
+    <description>形态 A 宿主样例：一行依赖引入 z-dms-spring-boot-starter，演示登记 / 探活 / 取连接执行查询</description>
+
+    <dependencies>
+        <!-- ★ 形态 A 的「一行依赖」：宿主引入这一条即获得数据源管控能力。 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-dms-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- MySQL 驱动（starter 已传递，这里显式声明一份，便于运维看清依赖面）。 -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+        </dependency>
+        <!-- SLF4J binding：z-boot-parent 链上排除了 logback（组织口径走 log4j2），
+             宿主必须自带一个 binding，否则 slf4j 落到 NOP ⇒ z-dms 的探活失败日志不会打出来
+             （「失败要看得见」这条就废了）。此处用 log4j-slf4j-impl 2.17.2（配 slf4j-api 1.7.36；版本跟 parent 的 log4j2.version=2.25.4 对齐）。 -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.25.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
