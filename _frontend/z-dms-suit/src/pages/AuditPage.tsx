@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Select, Space, Table, Tag } from 'antd'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Button, Card, Input, Select, Space, Table, Tag } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { listAudit, listSources } from '../api'
@@ -17,6 +17,7 @@ export default function AuditPage() {
   const [datasourceId, setDatasourceId] = useState<string | undefined>(undefined)
   const [category, setCategory] = useState<string | undefined>(undefined)
   const [sourceIds, setSourceIds] = useState<string[]>([])
+  const [keyword, setKeyword] = useState('')
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -40,6 +41,15 @@ export default function AuditPage() {
   }, [])
 
   const data = category ? rows.filter((r) => r.category === category) : rows
+
+  /** 客户端查询：按动作 / 数据源 / 操作人过滤（叠加在类别筛选之上）。 */
+  const filteredData = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return data
+    return data.filter((r) =>
+      `${r.action || ''} ${r.datasourceId || ''} ${r.operator || ''}`.toLowerCase().includes(kw),
+    )
+  }, [data, keyword])
 
   const columns: TableColumnsType<AuditEntry> = [
     {
@@ -84,6 +94,12 @@ export default function AuditPage() {
         title="审计流水（谁改了什么 · 谁用了哪个数据源）"
         extra={
           <Space>
+            <Input.Search
+              allowClear
+              placeholder="按动作 / 数据源 / 操作人过滤"
+              style={{ width: 240 }}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
             <Select
               allowClear
               style={{ width: 200 }}
@@ -113,7 +129,7 @@ export default function AuditPage() {
           rowKey={(r) => `${r.category}-${r.occurredAt}-${r.datasourceId}-${r.action}`}
           size="small"
           columns={columns}
-          dataSource={data}
+          dataSource={filteredData}
           loading={loading}
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 条流水` }}
           scroll={{ x: 1100 }}

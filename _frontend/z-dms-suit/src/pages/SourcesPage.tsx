@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   App as AntdApp,
   Button,
   Card,
+  Input,
   Popconfirm,
   Space,
   Table,
@@ -35,6 +36,16 @@ export default function SourcesPage() {
   const [testingId, setTestingId] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<SourceItem | null>(null)
+  const [keyword, setKeyword] = useState('')
+
+  /** 客户端查询：按数据源 ID / 名称 / 类型过滤（不改动接口返回的原始集合）。 */
+  const filteredItems = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return items
+    return items.filter((item) =>
+      `${item.id || ''} ${item.name || ''} ${item.type || ''}`.toLowerCase().includes(kw),
+    )
+  }, [items, keyword])
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -152,6 +163,12 @@ export default function SourcesPage() {
         title="数据源（组织级登记台账）"
         extra={
           <Space>
+            <Input.Search
+              allowClear
+              placeholder="按数据源 ID / 名称 / 类型过滤"
+              style={{ width: 240 }}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
             <Button icon={<ReloadOutlined />} onClick={() => void reload()} loading={loading}>
               刷新并重新探活
             </Button>
@@ -169,7 +186,7 @@ export default function SourcesPage() {
           rowKey="id"
           size="small"
           columns={columns}
-          dataSource={items}
+          dataSource={filteredItems}
           loading={loading}
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 个数据源` }}
           scroll={{ x: 1100 }}

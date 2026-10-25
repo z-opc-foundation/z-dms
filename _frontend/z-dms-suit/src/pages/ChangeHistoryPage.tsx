@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Card, Select, Space, Table, Tag } from 'antd'
+import { Button, Card, Input, Select, Space, Table, Tag } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { listChanges, listSources } from '../api'
@@ -44,6 +44,16 @@ export default function ChangeHistoryPage() {
   const [loading, setLoading] = useState(false)
   const [datasourceId, setDatasourceId] = useState<string | undefined>(undefined)
   const [sourceIds, setSourceIds] = useState<string[]>([])
+  const [keyword, setKeyword] = useState('')
+
+  /** 客户端查询：按数据源 / 变更类型 / 操作人过滤。 */
+  const filteredRows = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    if (!kw) return rows
+    return rows.filter((row) =>
+      `${row.datasourceId || ''} ${row.changeType || ''} ${row.operator || ''}`.toLowerCase().includes(kw),
+    )
+  }, [rows, keyword])
 
   const reload = useCallback(async () => {
     setLoading(true)
@@ -108,6 +118,12 @@ export default function ChangeHistoryPage() {
         title="变更历史（每一次修改的前后值）"
         extra={
           <Space>
+            <Input.Search
+              allowClear
+              placeholder="按数据源 / 变更类型 / 操作人过滤"
+              style={{ width: 240 }}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
             <Select
               allowClear
               style={{ width: 220 }}
@@ -126,7 +142,7 @@ export default function ChangeHistoryPage() {
           rowKey="id"
           size="small"
           columns={columns}
-          dataSource={rows}
+          dataSource={filteredRows}
           loading={loading}
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 条变更` }}
           expandable={{
