@@ -1,4 +1,5 @@
-import { DatabaseOutlined, HistoryOutlined, ReadOutlined, SafetyOutlined } from '@ant-design/icons'
+import { DatabaseOutlined, HistoryOutlined, HomeOutlined, ReadOutlined, SafetyOutlined } from '@ant-design/icons'
+import HomePage from './pages/HomePage'
 import SourcesPage from './pages/SourcesPage'
 import ChangeHistoryPage from './pages/ChangeHistoryPage'
 import AuditPage from './pages/AuditPage'
@@ -10,6 +11,7 @@ export interface RouteEntry { path: string; Component: ComponentType }
 
 /** 菜单 + 路由清单。 */
 export const menuItems: MenuItem[] = [
+  { key: '/z-dms/home', label: '首页', icon: <HomeOutlined /> },
   { key: '/z-dms/sources', label: '数据源', icon: <DatabaseOutlined /> },
   { key: '/z-dms/changes', label: '变更历史', icon: <HistoryOutlined /> },
   { key: '/z-dms/audit', label: '审计流水', icon: <SafetyOutlined /> },
@@ -17,6 +19,7 @@ export const menuItems: MenuItem[] = [
 ]
 
 export const routes: RouteEntry[] = [
+  { path: '/z-dms/home', Component: HomePage },
   { path: '/z-dms/sources', Component: SourcesPage },
   { path: '/z-dms/changes', Component: ChangeHistoryPage },
   { path: '/z-dms/audit', Component: AuditPage },

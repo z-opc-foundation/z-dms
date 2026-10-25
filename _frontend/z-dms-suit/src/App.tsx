@@ -17,8 +17,8 @@ function NotFound() {
       title="页面不存在"
       subTitle="路由表里没有这条路径。"
       extra={
-        <Button type="primary" onClick={() => { window.location.href = '/z-dms/sources' }}>
-          去数据源列表
+        <Button type="primary" onClick={() => { window.location.href = menuItems[0].key }}>
+          去首页
         </Button>
       }
     />
@@ -74,7 +74,7 @@ export default function App() {
         <Routes>
           <Route path="/z-dms/identity" element={<IdentityPage />} />
           <Route element={<ProtectedShell />}>
-            <Route path="/" element={<Navigate to="/z-dms/sources" replace />} />
+            <Route path="/" element={<Navigate to={menuItems[0].key} replace />} />
             {routes.map((r) => (
               <Route key={r.path} path={r.path} element={<r.Component />} />
             ))}
