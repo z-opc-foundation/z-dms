@@ -57,6 +57,11 @@ function ProtectedShell() {
       appShort="z-dms"
       appVersion="1.0.0"
       appUser={operator}
+      appIcon={{
+        icon: <img src="/icon.png" alt="z-dms 数据源管控台" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }} />,
+        color: '#4f46e5',
+        label: 'z-dms 数据源管控台',
+      }}
       loginPath="/z-dms/identity"
     />
   )
