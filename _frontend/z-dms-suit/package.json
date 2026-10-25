@@ -11,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@yuku123/z-frontend-common": "^1.1.6",
+    "@yuku123/z-frontend-common": "^1.1.7",
     "antd": "^6.3.3",
     "axios": "^1.7.0",
     "dayjs": "^1.11.10",
