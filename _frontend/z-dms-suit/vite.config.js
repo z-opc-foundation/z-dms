@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import {safeEmptyOutDir} from '../../build-tools/safe-vite-plugin.mjs'
 
 /**
  * 应用层 = SPA，产物 dist/ 由 z-dms-admin 的 maven-resources-plugin 拷进
@@ -14,7 +15,7 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom', 'react-router-dom', 'antd', '@ant-design/icons', 'axios'],
   },
-  plugins: [react()],
+  plugins: [safeEmptyOutDir(), react()],
   server: {
     port: 5183,
     host: '0.0.0.0',
@@ -26,7 +27,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    emptyOutDir: true,
+    emptyOutDir: false,
     sourcemap: false,
     // antd 6 全量 import 的 vendor chunk 约 1.1MB（gzip ~370KB）—— 这是
     // "React + antd 控制台"这个技术栈的体积下限，不是配置出错。

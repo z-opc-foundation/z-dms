@@ -2,7 +2,7 @@ package com.zifang.z.dms.admin.audit;
 
 import com.zifang.z.dms.admin.config.DmsAdminProperties;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 操作人解析（审计面要能回答「谁」）。
