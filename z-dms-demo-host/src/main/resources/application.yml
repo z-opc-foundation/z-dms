@@ -27,7 +27,7 @@ z:
         password: ${ZDMS_META_DB_PASSWORD}
   dms:
     enabled: true
-    # 登记落库（表结构见 _doc/004_sql/）
+    # 登记落库（表结构见 _doc/002_deploy/init/）
     store-enabled: true
     # 定时探活间隔
     probe-interval-ms: 30000

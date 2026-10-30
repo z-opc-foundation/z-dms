@@ -57,7 +57,7 @@ z-dms/
 ├── LICENSE                          # Apache-2.0
 ├── _doc/
 │   ├── 001_arch/00-overview.md      # 架构总览
-│   └── 004_sql/                     # DDL（幂等脚本）
+│   └── 002_deploy/init/             # 初始化 DDL（幂等脚本，按 V1→V4 顺序执行）
 │       ├── V1__z_dms_datasource_def.sql
 │       ├── V2__z_dms_datasource_change_log.sql
 │       ├── V3__z_dms_datasource_change_log_values.sql   # 变更流水补「前后值」两列（幂等 ALTER）
@@ -96,7 +96,7 @@ z-dms/
 |---|---|
 | ① 写入口零明文 | `DataSourceDefValidator` 拦敏感键（30 余种形态：`password`/`secret`/`token`/`api-key`/`access_token`…），**直接报错，不静默丢弃**；错误消息只列键名，不带值 |
 | ② 读出口只解析引用 | `CredentialResolver` 按 `credentialRef` 取凭据，明文只在内存里拼进连接参数，**不写回定义** |
-| ③ 明文只允许存在于非持久化内存态与凭据库本身 | 表结构里**没有口令列**（见 `_doc/004_sql/`）；`Credential#toString` 对口令打码 |
+| ③ 明文只允许存在于非持久化内存态与凭据库本身 | 表结构里**没有口令列**（见 `_doc/002_deploy/init/`）；`Credential#toString` 对口令打码 |
 
 `credentialRef` 形态：`<group>/<key>` —— 即 **z-mist 的键名**，例如 `dms-demo/mysql-main`。
 
@@ -211,7 +211,7 @@ try (Connection conn = dataSourceService.require("ds-main").getConnection()) {
 | `z_dms_datasource_change_log` | 变更流水（形态 B 审计面 · V3 补了 `before_value` / `after_value` 两个前后值快照列） |
 | `z_dms_datasource_usage_log` | 使用流水（形态 B 审计面 · 谁在什么时候用了哪个数据源） |
 
-DDL 在 `_doc/004_sql/`，**幂等**（`CREATE TABLE IF NOT EXISTS`；V3 对旧表用
+DDL 在 `_doc/002_deploy/init/`，**幂等**（`CREATE TABLE IF NOT EXISTS`；V3 对旧表用
 `information_schema` 判列存在再 `PREPARE` 动态 ALTER）：执行两遍无报错。
 
 ---
@@ -345,6 +345,14 @@ mvn -Pcentral deploy
 ```
 
 ---
+
+## 文档目录
+
+本项目文档统一收口在 `_doc/` 下（八类固定编号表，桶按需存在）:
+
+- [`_doc/001_arch/`](_doc/001_arch/) — 架构总览
+- [`_doc/002_deploy/`](_doc/002_deploy/) — 部署运维与初始化 DDL（`init/`）
+- [`_doc/003_script/`](_doc/003_script/) — 构建与发布脚本
 
 ## 📚 相关卡与文档
 

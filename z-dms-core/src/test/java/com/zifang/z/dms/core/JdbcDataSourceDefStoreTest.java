@@ -35,7 +35,7 @@ class JdbcDataSourceDefStoreTest {
         ds.setPassword("");
         try (java.sql.Connection conn = ds.getConnection();
              java.sql.Statement st = conn.createStatement()) {
-            // H2 兼容模式下的等价建表语句（生产权威 DDL 在 _doc/004_sql/V1__z_dms_datasource_def.sql，
+            // H2 兼容模式下的等价建表语句（生产权威 DDL 在 _doc/002_deploy/init/V1__z_dms_datasource_def.sql，
             // 那边带 InnoDB/utf8mb4，H2 不认这两段语法，故此处只取等价列定义）。
             st.execute("CREATE TABLE IF NOT EXISTS z_dms_datasource_def ("
                     + "id VARCHAR(64) NOT NULL PRIMARY KEY,"
