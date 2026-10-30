@@ -23,7 +23,7 @@
     <parent>
         <groupId>io.github.yuku123</groupId>
         <artifactId>z-boot-parent</artifactId>
-        <version>1.1.0</version>
+        <version>1.2.0</version>
         <relativePath/>
     </parent>
 
@@ -247,11 +247,8 @@
                         <version>${maven-gpg-plugin.version}</version>
                         <configuration>
                             <skip>${central.gpg.skip}</skip>
-                            <gpgArguments>
-                                <arg>--pinentry-mode</arg>
-                                <arg>loopback</arg>
-                                <arg>--no-tty</arg>
-                            </gpgArguments>
+                            <keyname>A403FCCFD7EF5DA6</keyname>
+                            <executable>${maven.multiModuleProjectDirectory}/_doc/003_script/gpg-with-passphrase.sh</executable>
                         </configuration>
                         <executions>
                             <execution>
@@ -273,6 +270,15 @@
                             <waitUntil>uploaded</waitUntil>
                             <waitMaxTime>1800</waitMaxTime>
                             <waitPollingInterval>10</waitPollingInterval>
+                            <!-- 2026-10-30 首次发中央：点名排除两个可执行应用模块。
+                                 z-dms-admin / z-dms-demo-host 都是带 @SpringBootApplication 且
+                                 走 spring-boot-maven-plugin repackage 的 fat jar（无 classifier）
+                                 ⇒ 不是别仓可引的库件，按政策不入中央，
+                                 否则会给 io.github.yuku123 多占两个不可复用的版本号。 -->
+                            <excludeArtifacts>
+                                <excludeArtifact>z-dms-admin</excludeArtifact>
+                                <excludeArtifact>z-dms-demo-host</excludeArtifact>
+                            </excludeArtifacts>
                         </configuration>
                     </plugin>
                 </plugins>
