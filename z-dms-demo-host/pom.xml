@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>z-dms-demo-host</artifactId>
-    <name>z-dms-demo-host</name>
+    <name>z-dms :: demo-host</name>
     <packaging>jar</packaging>
 
     <description>形态 A 宿主样例：一行依赖引入 z-dms-spring-boot-starter，演示登记 / 探活 / 取连接执行查询</description>

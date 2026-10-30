@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>z-dms-core</artifactId>
-    <name>z-dms-core</name>
+    <name>z-dms :: core</name>
     <packaging>jar</packaging>
 
     <description>数据源管控核心：DataSourceDef 模型 + 登记 CRUD + Druid 连接工厂 + 探活 + 变更事件</description>

@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>z-dms-spring-boot-starter</artifactId>
-    <name>z-dms-spring-boot-starter</name>
+    <name>z-dms :: spring-boot-starter</name>
     <packaging>jar</packaging>
 
     <description>形态 A 嵌入式 starter：宿主一行依赖引入即得数据源登记 / 连接工厂 / 探活 / z-config 推送</description>

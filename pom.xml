@@ -32,7 +32,7 @@
     <version>${revision}</version>
     <packaging>pom</packaging>
 
-    <name>z-dms</name>
+    <name>z-dms :: root</name>
     <description>数据源管控底座：DataSourceDef + credentialRef + Druid 连接工厂 + 定时探活 + z-config 推送</description>
 
     <url>https://github.com/z-opc-foundation/z-dms</url>

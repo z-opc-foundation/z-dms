@@ -12,7 +12,7 @@
     </parent>
 
     <artifactId>z-dms-admin</artifactId>
-    <name>z-dms-admin</name>
+    <name>z-dms :: admin</name>
     <packaging>jar</packaging>
 
     <description>形态 B 组织级 web 管控宿主：数据源登记 / 测连接 / 变更历史 / 审计流水（复用 z-dms-core 与 starter，不复制一份 core）</description>
