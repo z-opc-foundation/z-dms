@@ -12,7 +12,7 @@
 | **仓库** | `z-dms`（数据源管控底座） |
 | **Maven 坐标** | `io.github.yuku123:z-dms:${revision}` |
 | **当前版本** | `1.0.0`（根 POM `<revision>`，CI-friendly versions + flatten-maven-plugin `oss` 模式） |
-| **父项目** | `io.github.yuku123:z-boot-parent:1.2.1`（`<relativePath/>` 留空，parent 在 repo1 不在磁盘） |
+| **父项目** | `io.github.yuku123:z-boot-parent:1.2.2`（`<relativePath/>` 留空，parent 在 repo1 不在磁盘） |
 | **运行口径** | Java 8 · Spring Boot 2.7.18 |
 | **包名** | `com.zifang.z.dms.*`（与 `com.zifang.z.lc.report.*` / `com.zifang.z.etl.*` 同格） |
 | **GitHub** | ⚠️ **远端仓待人工创建**（见文末「人工执行清单」；本仓目前是本地仓，无 remote） |
@@ -53,7 +53,7 @@ z-dms 就是给第 1、3 套收口的底座 —— **一个 core 两种暴露**�
 
 ```
 z-dms/
-├── pom.xml                          # 根聚合 POM：z-boot-parent:1.2.1，${revision}，常开 flatten(oss)
+├── pom.xml                          # 根聚合 POM：z-boot-parent:1.2.2，${revision}，常开 flatten(oss)
 ├── LICENSE                          # Apache-2.0
 ├── _doc/
 │   ├── 001_arch/00-overview.md      # 架构总览
