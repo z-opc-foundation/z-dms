@@ -139,7 +139,7 @@ export default function SourcesPage() {
           >
             测连接
           </Button>
-          <Button
+          <Button type="link"
             size="small"
             onClick={() => { setEditing(row); setDrawerOpen(true) }}
           >
@@ -150,7 +150,7 @@ export default function SourcesPage() {
             description="会显式关闭连接池，并在变更历史里留一条 REMOVED。"
             onConfirm={() => void handleDelete(row)}
           >
-            <Button size="small" danger>删除</Button>
+            <Button type="link" size="small" danger>删除</Button>
           </Popconfirm>
         </Space>
       ),
