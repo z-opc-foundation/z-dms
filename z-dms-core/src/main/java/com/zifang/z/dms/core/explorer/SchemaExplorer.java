@@ -64,6 +64,15 @@ public class SchemaExplorer {
                     }
                 }
             }
+            // 连接默认库排最前（phpMyAdmin 口径：进来就落在当前库）。
+            String preferred = defaultSchema(conn);
+            if (preferred != null) {
+                out.sort((a, b) -> {
+                    if (a.getName().equals(preferred)) return -1;
+                    if (b.getName().equals(preferred)) return 1;
+                    return 0;
+                });
+            }
             return out;
         } catch (SQLException e) {
             throw new IllegalStateException("浏览库清单失败: " + rootMessage(e), e);
@@ -83,30 +92,20 @@ public class SchemaExplorer {
             String effectiveSchema = schema == null || schema.trim().isEmpty()
                     ? defaultSchema(conn) : schema.trim();
             ResultSet rs = null;
-            boolean asCatalog = false;
+            List<SchemaObject> out;
             try {
                 rs = meta.getTables(effectiveSchema, null, "%", types);
-                if (isEmpty(rs)) {
+                out = readTableRows(rs);
+                // schemaPattern 兜底只给真·schema 驱动（H2 / PostgreSQL）。MySQL 的
+                // databaseTerm=CATALOG 会忽略 schemaPattern：null catalog 摆法会返回
+                // 全部库的表，把别的库漏进来（实测 Connector/J 8.2）。
+                if (out.isEmpty() && meta.supportsSchemasInTableDefinitions()) {
                     closeQuietly(rs);
                     rs = meta.getTables(null, effectiveSchema, "%", types);
-                    asCatalog = false;
-                } else {
-                    asCatalog = true;
+                    out = readTableRows(rs);
                 }
-                List<SchemaObject> out = new ArrayList<>();
-                while (rs.next()) {
-                    String name = rs.getString("TABLE_NAME");
-                    String type = rs.getString("TABLE_TYPE");
-                    String remark = rs.getString("REMARKS");
-                    if (name == null || name.trim().isEmpty()) {
-                        continue;
-                    }
-                    String k = type != null && type.contains("VIEW")
-                            ? SchemaObject.KIND_VIEW : SchemaObject.KIND_TABLE;
-                    out.add(new SchemaObject(name, k, remark));
-                }
-                log.debug("z-dms 浏览表清单：source={} schema={} kind={} 共 {} 个（catalog 摆法={})",
-                        sourceId, effectiveSchema, kind, out.size(), asCatalog);
+                log.debug("z-dms 浏览表清单：source={} schema={} kind={} 共 {} 个",
+                        sourceId, effectiveSchema, kind, out.size());
                 return out;
             } finally {
                 closeQuietly(rs);
@@ -174,12 +173,23 @@ public class SchemaExplorer {
         DatabaseMetaData meta = conn.getMetaData();
         // 先按 catalog 摆法（MySQL 默认），再按 schemaPattern 摆法（H2 / PostgreSQL 等）。
         ResultSet rs = meta.getTables(effectiveSchema, null, wanted, new String[]{"TABLE", "VIEW"});
-        boolean asCatalog = true;
-        if (isEmpty(rs)) {
+        ResolvedTable rt = tryMatchTable(rs, wanted, effectiveSchema, true);
+        // 兜底摆法同样只给真·schema 驱动；MySQL 上 schemaPattern 被忽略，兜底会跨库
+        // 误匹配同名表（把 oc.table 查成 sys.table），必须挡住。
+        if (rt == null && meta.supportsSchemasInTableDefinitions()) {
             closeQuietly(rs);
             rs = meta.getTables(null, effectiveSchema, wanted, new String[]{"TABLE", "VIEW"});
-            asCatalog = false;
+            rt = tryMatchTable(rs, wanted, effectiveSchema, false);
         }
+        if (rt == null) {
+            throw new IllegalArgumentException(
+                    "表不存在（或当前账号无权查看）: " + effectiveSchema + "." + wanted);
+        }
+        return rt;
+    }
+
+    private ResolvedTable tryMatchTable(ResultSet rs, String wanted, String effectiveSchema,
+                                        boolean asCatalog) throws SQLException {
         try {
             while (rs.next()) {
                 String name = rs.getString("TABLE_NAME");
@@ -198,11 +208,26 @@ public class SchemaExplorer {
                     return rt;
                 }
             }
+            return null;
         } finally {
             closeQuietly(rs);
         }
-        throw new IllegalArgumentException(
-                "表不存在（或当前账号无权查看）: " + effectiveSchema + "." + wanted);
+    }
+
+    private List<SchemaObject> readTableRows(ResultSet rs) throws SQLException {
+        List<SchemaObject> out = new ArrayList<>();
+        while (rs.next()) {
+            String name = rs.getString("TABLE_NAME");
+            String type = rs.getString("TABLE_TYPE");
+            String remark = rs.getString("REMARKS");
+            if (name == null || name.trim().isEmpty()) {
+                continue;
+            }
+            String k = type != null && type.contains("VIEW")
+                    ? SchemaObject.KIND_VIEW : SchemaObject.KIND_TABLE;
+            out.add(new SchemaObject(name, k, remark));
+        }
+        return out;
     }
 
     private List<ColumnMeta> readColumns(DatabaseMetaData meta, ResolvedTable rt) throws SQLException {
@@ -348,10 +373,6 @@ public class SchemaExplorer {
             t = t.getCause();
         }
         return t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage();
-    }
-
-    private static boolean isEmpty(ResultSet rs) throws SQLException {
-        return !rs.next();
     }
 
     static void closeQuietly(ResultSet rs) {

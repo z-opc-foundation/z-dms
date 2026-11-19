@@ -91,7 +91,7 @@ public class TableDataReader {
                 out.setTotal(countRows(conn, rt, where));
             }
 
-            String sql = "SELECT * FROM " + qualify(conn, rt) + where.sql + orderBy
+            String sql = "SELECT * FROM " + qualify(conn, rt) + where.clause() + orderBy
                     + " LIMIT " + size + " OFFSET " + offset;
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setQueryTimeout(queryTimeoutSeconds);
@@ -229,7 +229,7 @@ public class TableDataReader {
 
     private long countRows(Connection conn, SchemaExplorer.ResolvedTable rt, Where where)
             throws SQLException {
-        String sql = "SELECT COUNT(*) FROM " + qualify(conn, rt) + where.sql;
+        String sql = "SELECT COUNT(*) FROM " + qualify(conn, rt) + where.clause();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             // count 单独给短超时：大表全表扫不该把管理端拖死；超时 ⇒ 总数未知（-1），分页照常。
             ps.setQueryTimeout(Math.max(3, queryTimeoutSeconds / 2));
@@ -289,6 +289,11 @@ public class TableDataReader {
             if (param != null) {
                 params.add(param);
             }
+        }
+
+        /** 片段以 " AND " 开头；空清单返回空串，否则替换成 WHERE 开头。 */
+        String clause() {
+            return sql.length() == 0 ? "" : " WHERE " + sql.substring(5);
         }
     }
 }
