@@ -1,5 +1,7 @@
 package com.zifang.z.dms.admin.web;
 
+import com.zifang.z.dms.admin.auth.DmsPermissionDeniedException;
+import com.zifang.z.dms.admin.auth.DmsUnauthenticatedException;
 import com.zifang.z.dms.admin.web.dto.ApiResult;
 import com.zifang.z.dms.core.credential.CredentialResolveException;
 import org.springframework.http.HttpStatus;
@@ -18,6 +20,24 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResult<Object>> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResult.fail(400, e.getMessage()));
+    }
+
+    @ExceptionHandler(DmsUnauthenticatedException.class)
+    public ResponseEntity<ApiResult<Object>> unauthenticated(DmsUnauthenticatedException e) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResult.fail(401, e.getMessage()));
+    }
+
+    @ExceptionHandler(DmsPermissionDeniedException.class)
+    public ResponseEntity<ApiResult<Object>> permissionDenied(DmsPermissionDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResult.fail(403, e.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResult<Object>> conflict(IllegalStateException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResult.fail(400, e.getMessage()));
     }

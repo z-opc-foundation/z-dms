@@ -83,6 +83,24 @@
             <artifactId>z-meta-starter</artifactId>
             <version>${z-meta.version}</version>
         </dependency>
+        <!--
+            ★ z-ctc（4A 中心）两条链路，故障域分开：
+              z-ctc-sso   —— 登录态（JWT 验签，TokenService；SsoAutoConfiguration 自带
+                             SsoInterceptor，这里用 sso.intercept-paths: [] 置空它，
+                             唯一闸门是 z.dms.auth 的 DMS-GATE）
+              z-ctc-client —— 授权数据（ZCtcClient.listUserPermissions，需转发终端用户 token）
+            客户端不用 starter（Central 上 ≥1.0.6 没有），直接 ZCtcClientFactory.remote(baseUrl)。
+        -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-ctc-sso</artifactId>
+            <version>1.0.8</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-ctc-client</artifactId>
+            <version>1.0.8</version>
+        </dependency>
 </dependencies>
 
     <build>

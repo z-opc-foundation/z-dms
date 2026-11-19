@@ -52,6 +52,34 @@ z:
     credential:
       dms-demo:
         mysql-main: ${ZDMS_DEMO_CREDENTIAL}
+    # ── 权限管控（默认开；z-ctc 4A 中心）─────────────────────────────────────
+    auth:
+      enabled: ${ZDMS_AUTH_ENABLED:true}
+      # 同集群 z-ctc（4A 中心）地址；置空且不关开关 ⇒ 启动直接失败（fail-closed）
+      ctc-base-url: ${ZDMS_CTC_BASE_URL:http://z-ctc-admin.z-ctc.svc.cluster.local:8888}
+      # 本应用在 z_ctc_spc_resource 里的 appCode
+      app-code: z-dms
+      # 授权码本地缓存 TTL（授权变更最迟这么久生效）
+      cache-ttl-ms: 30000
+    # ── SQL 控制台与数据浏览（默认保守：写关、行数/超时/长度有上限）──────────
+    console:
+      write-enabled: ${ZDMS_CONSOLE_WRITE_ENABLED:false}
+      max-rows: 1000
+      timeout-seconds: 30
+      max-sql-length: 10000
+      max-page-size: 500
+      history-limit: 200
+
+# ── z-ctc-sso 登录态链路 ─────────────────────────────────────────────────
+# intercept-paths 置空 = 官方 SsoInterceptor 不拦任何路径（它要吃东西但不咬人）；
+# 唯一的 401 闸门是 z.dms.auth 装的 DMS-GATE（/api/dms/**）——
+# 两把刀收成一把，z.dms.auth.enabled 才能真正一键关闭权限管控。
+sso:
+  ctc-base-url: ${ZDMS_CTC_BASE_URL:http://z-ctc-admin.z-ctc.svc.cluster.local:8888}
+  intercept-paths: []
+  token-cookie-names:
+    - sso_token
+    - zctc_token
 
 management:
   endpoints:

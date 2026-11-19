@@ -2,9 +2,19 @@ import { createRequest } from '@yuku123/z-frontend-common'
 import type {
   AuditEntry,
   ChangeRecord,
+  ConsoleCapabilities,
+  ExplorerSource,
+  MeInfo,
+  PermissionPointInfo,
   ProbeResult,
+  SchemaNode,
   SourceForm,
   SourceItem,
+  SqlExecutionView,
+  SqlHistoryRecord,
+  TableDetail,
+  TablePage,
+  TableQuery,
 } from './types'
 
 /**
@@ -95,4 +105,75 @@ export function listChanges(datasourceId?: string): Promise<ChangeRecord[]> {
 export function listAudit(datasourceId?: string): Promise<AuditEntry[]> {
   const q = datasourceId ? `?datasourceId=${encodeURIComponent(datasourceId)}` : ''
   return call<AuditEntry[]>(() => http.get(`/dms/audit${q}`))
+}
+
+/* ────────────────────────── 权限与登录态 ────────────────────────── */
+
+/** 当前登录态与权限点（未登录也返回 authenticated=false）。 */
+export function fetchMe(): Promise<MeInfo> {
+  return call<MeInfo>(() => http.get('/dms/auth/me'))
+}
+
+/** z-dms 权限点清单（4A 中心申请授权时对照）。 */
+export function listPermissionPoints(): Promise<PermissionPointInfo[]> {
+  return call<PermissionPointInfo[]>(() => http.get('/dms/auth/points'))
+}
+
+/* ────────────────────────── 数据浏览 ────────────────────────── */
+
+/** 可浏览的数据源清单（最小视图：id/name/type）。 */
+export function listExplorerSources(): Promise<ExplorerSource[]> {
+  return call<ExplorerSource[]>(() => http.get('/dms/explorer/sources'))
+}
+
+/** 某数据源的库清单。 */
+export function listSchemas(sourceId: string): Promise<SchemaNode[]> {
+  return call<SchemaNode[]>(() =>
+    http.get(`/dms/explorer/${encodeURIComponent(sourceId)}/schemas`),
+  )
+}
+
+/** 某库下的表 / 视图清单。 */
+export function listTables(sourceId: string, schema: string, kind?: string): Promise<SchemaNode[]> {
+  const q = new URLSearchParams({ schema })
+  if (kind) q.set('kind', kind)
+  return call<SchemaNode[]>(() =>
+    http.get(`/dms/explorer/${encodeURIComponent(sourceId)}/tables?${q.toString()}`),
+  )
+}
+
+/** 表结构（字段 + 索引 + 建表语句）。 */
+export function tableDetail(sourceId: string, schema: string, table: string): Promise<TableDetail> {
+  const q = new URLSearchParams({ schema, table })
+  return call<TableDetail>(() =>
+    http.get(`/dms/explorer/${encodeURIComponent(sourceId)}/table?${q.toString()}`),
+  )
+}
+
+/** 表数据分页（筛选 + 排序）。 */
+export function tableRows(sourceId: string, query: TableQuery): Promise<TablePage> {
+  return call<TablePage>(() =>
+    http.post(`/dms/explorer/${encodeURIComponent(sourceId)}/rows`, query),
+  )
+}
+
+/* ────────────────────────── SQL 控制台 ────────────────────────── */
+
+/** 控制台能力位（写开关、上限）。 */
+export function consoleCapabilities(): Promise<ConsoleCapabilities> {
+  return call<ConsoleCapabilities>(() => http.get('/dms/console/capabilities'))
+}
+
+/** 执行一条 SQL（真执行；写语句要服务端开开关 + 有写权限点）。 */
+export function executeSql(sourceId: string, sql: string, maxRows?: number): Promise<SqlExecutionView> {
+  return call<SqlExecutionView>(() =>
+    http.post('/dms/console/execute', { sourceId, sql, maxRows }),
+  )
+}
+
+/** SQL 执行历史。 */
+export function listSqlHistory(datasourceId?: string, limit = 50): Promise<SqlHistoryRecord[]> {
+  const q = new URLSearchParams({ limit: String(limit) })
+  if (datasourceId) q.set('datasourceId', datasourceId)
+  return call<SqlHistoryRecord[]>(() => http.get(`/dms/console/history?${q.toString()}`))
 }

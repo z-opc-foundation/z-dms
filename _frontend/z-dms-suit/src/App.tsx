@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout, ErrorBoundary } from '@yuku123/z-frontend-common'
-import { Button, Result } from 'antd'
+import { Button, Result, Spin } from 'antd'
 import { menuItems, routes } from './pages-manifest'
 import IdentityPage from './IdentityPage'
+import { fetchMe } from './api'
+import type { MeInfo } from './types'
 
 interface Operator {
   name?: string
@@ -25,34 +27,86 @@ function NotFound() {
   )
 }
 
+/** 未登录态：给出去 z-ctc 登录的入口（权限管控开启且后端 401 时）。 */
+function NeedLogin({ loginUrl }: { loginUrl?: string | null }) {
+  return (
+    <Result
+      status="403"
+      title="尚未登录"
+      subTitle="z-dms 权限管控已开启，需要先通过 z-ctc（4A 中心）登录后再使用管控台。"
+      extra={
+        loginUrl ? (
+          <Button type="primary" onClick={() => { window.location.href = loginUrl }}>
+            去 z-ctc 登录
+          </Button>
+        ) : (
+          <Button onClick={() => window.location.reload()}>刷新重试</Button>
+        )
+      }
+    />
+  )
+}
+
 /**
- * 受保护壳：没有操作人身份就去身份选择页。
+ * 受保护壳：权限感知的菜单。
  *
- * 【为什么没有口令登录页】
- * 形态 B 的凭据纪律是「界面全链路无明文口令输入框」——
- * 数据源凭据面只有 credentialRef 选择器，而本控制台的操作人身份由
- * 平台 SSO / 网关以 X-Operator 头下发（审计流水要靠它回答「谁」）。
- * 本地形态下用「身份选择」页代替口令登录：**这里也没有任何口令输入框**。
+ * <p>启动时拉 /auth/me：
+ * <ul>
+ *   <li>权限管控关闭（enabled=false）→ 免登录模式，维持 X-Operator 身份选择口径；</li>
+ *   <li>开启且已登录 → 菜单按权限点显隐（真闸在服务端，这里只是体验）；</li>
+ *   <li>开启但未登录 → 登录引导页（不猜身份、不放行）。</li>
+ * </ul>
  */
 function ProtectedShell() {
   const [operator, setOperator] = useState<Operator | null>(null)
-  const [ready, setReady] = useState(false)
+  const [me, setMe] = useState<MeInfo | null>(null)
+  const [meReady, setMeReady] = useState(false)
 
   useEffect(() => {
-    const name = localStorage.getItem('dmsOperator')
-    if (!name) {
-      window.location.replace('/z-dms/identity')
-      return
-    }
-    setOperator({ name, role: '数据源运维' })
-    setReady(true)
+    fetchMe()
+      .then(setMe)
+      .catch(() => setMe({ enabled: false, authenticated: false, degraded: false, permissions: [] }))
+      .finally(() => setMeReady(true))
   }, [])
 
-  if (!ready) return null
+  useEffect(() => {
+    if (me && !me.enabled) {
+      // 免登录模式（历史口径）：没有操作人身份就去身份选择页
+      const name = localStorage.getItem('dmsOperator')
+      if (name) {
+        setOperator({ name, role: '数据源运维' })
+      } else {
+        window.location.replace('/z-dms/identity')
+      }
+    } else if (me?.authenticated) {
+      setOperator({ name: me.display ?? undefined, role: 'z-ctc 登录' })
+    }
+  }, [me])
+
+  const visibleMenu = useMemo(() => {
+    if (!me || !me.enabled) return menuItems
+    const perms = new Set(me.permissions)
+    if (perms.has('DMS_GLOBAL_ADMIN')) return menuItems
+    return menuItems.filter((m) => !m.permission || perms.has(m.permission))
+  }, [me])
+
+  if (!meReady) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 120 }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (me?.enabled && !me.authenticated) {
+    return <NeedLogin loginUrl={me.loginUrl} />
+  }
+
+  if (!operator) return null
 
   return (
     <AppLayout
-      menuItems={menuItems}
+      menuItems={visibleMenu}
       appTitle="z-dms 数据源管控台"
       appShort="z-dms"
       appVersion="1.0.0"
@@ -67,6 +121,10 @@ function ProtectedShell() {
   )
 }
 
+function HomeRedirect() {
+  return <Navigate to={menuItems[0].key} replace />
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -74,7 +132,7 @@ export default function App() {
         <Routes>
           <Route path="/z-dms/identity" element={<IdentityPage />} />
           <Route element={<ProtectedShell />}>
-            <Route path="/" element={<Navigate to={menuItems[0].key} replace />} />
+            <Route path="/" element={<HomeRedirect />} />
             {routes.map((r) => (
               <Route key={r.path} path={r.path} element={<r.Component />} />
             ))}

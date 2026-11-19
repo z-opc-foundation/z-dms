@@ -2,6 +2,9 @@ package com.zifang.z.dms.admin.web;
 
 import com.zifang.z.dms.admin.audit.AuditTrailService;
 import com.zifang.z.dms.admin.audit.OperatorResolver;
+import com.zifang.z.dms.admin.auth.DmsCurrentUser;
+import com.zifang.z.dms.admin.auth.DmsPermissionPoint;
+import com.zifang.z.dms.admin.auth.DmsPermissionService;
 import com.zifang.z.dms.admin.web.dto.ApiResult;
 import com.zifang.z.dms.admin.web.dto.DataSourceForm;
 import com.zifang.z.dms.admin.web.dto.ProbeView;
@@ -59,17 +62,27 @@ public class DataSourceAdminController {
     private final DataSourceHealthProber prober;
     private final AuditTrailService auditTrailService;
     private final OperatorResolver operatorResolver;
+    private final DmsPermissionService permissionService;
 
     public DataSourceAdminController(DataSourceService dataSourceService,
                                      DataSourcePoolFactory poolFactory,
                                      DataSourceHealthProber prober,
                                      AuditTrailService auditTrailService,
-                                     OperatorResolver operatorResolver) {
+                                     OperatorResolver operatorResolver,
+                                     DmsPermissionService permissionService) {
         this.dataSourceService = dataSourceService;
         this.poolFactory = poolFactory;
         this.prober = prober;
         this.auditTrailService = auditTrailService;
         this.operatorResolver = operatorResolver;
+        this.permissionService = permissionService;
+    }
+
+    /** 权限闸（管控关闭时直通）；返回当前用户供审计操作人复用。 */
+    private DmsCurrentUser gate(HttpServletRequest request, DmsPermissionPoint... points) {
+        DmsCurrentUser user = permissionService.currentUser(request);
+        permissionService.require(user, points);
+        return user;
     }
 
     /**
@@ -79,7 +92,8 @@ public class DataSourceAdminController {
      */
     @GetMapping
     @BizApi(summary = "一屏看到全部登记数据源与各自健康态", description = "一屏看到全部登记数据源与各自健康态。 健康态是 当场探出来的 （逐池真借一次连接跑 SELECT 1），不是缓存里的旧结论。", tags = { "z-dms" })
-    public ApiResult<List<SourceView>> list() {
+    public ApiResult<List<SourceView>> list(HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_VIEW);
         DataSourceHealthReport report = dataSourceService.health();
         Map<String, DataSourceProbeResult> probes = new LinkedHashMap<>();
         for (DataSourceProbeResult p : report.getSources()) {
@@ -96,10 +110,11 @@ public class DataSourceAdminController {
     @PostMapping
     @BizApi(summary = "登记一个数据源（注册即探活，探活结论随结果返回）", description = "登记一个数据源（注册即探活，探活结论随结果返回）。", tags = { "z-dms" })
     public ApiResult<SourceView> register(@RequestBody @BizParam(name = "form", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceForm form, HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_MANAGE);
         DataSourceDef def = toDef(form);
         DataSourceDef before = dataSourceService.find(def.getId());
         RegistrationResult result = dataSourceService.register(def);
-        String operator = operatorResolver.resolve(request);
+        String operator = permissionService.operatorOf(request);
         auditTrailService.recordChange(def.getId(), before == null ? "REGISTERED" : "UPDATED",
                 before, def, operator,
                 before == null ? "登记数据源" : "重新登记数据源（换绑）");
@@ -111,6 +126,7 @@ public class DataSourceAdminController {
     @BizApi(summary = "更新一个已登记的数据源（换绑：旧池显式关闭，新池重新探活）", description = "更新一个已登记的数据源（换绑：旧池显式关闭，新池重新探活）。", tags = { "z-dms" })
     public ApiResult<SourceView> update(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, @RequestBody @BizParam(name = "form", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceForm form,
                                         HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_MANAGE);
         DataSourceDef def = toDef(form);
         def.setId(id);
         DataSourceDef before = dataSourceService.find(id);
@@ -118,7 +134,7 @@ public class DataSourceAdminController {
             throw new IllegalArgumentException("数据源未登记，无法更新: " + id);
         }
         RegistrationResult result = dataSourceService.update(def);
-        String operator = operatorResolver.resolve(request);
+        String operator = permissionService.operatorOf(request);
         auditTrailService.recordChange(id, "UPDATED", before, def, operator, "修改数据源定义");
         return ApiResult.ok(toView(def, result.getProbe()));
     }
@@ -127,6 +143,7 @@ public class DataSourceAdminController {
     @DeleteMapping("/{id}")
     @BizApi(summary = "摘除数据源（显式关闭池）", description = "摘除数据源（显式关闭池）。", tags = { "z-dms" })
     public ApiResult<Map<String, Object>> remove(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_MANAGE);
         DataSourceDef before = dataSourceService.find(id);
         if (before == null) {
             // 摘除一个不存在的源**不能静默成功**：否则界面会以为删掉了，
@@ -134,7 +151,7 @@ public class DataSourceAdminController {
             throw new IllegalArgumentException("数据源未登记，无法摘除: " + id);
         }
         dataSourceService.remove(id);
-        String operator = operatorResolver.resolve(request);
+        String operator = permissionService.operatorOf(request);
         auditTrailService.recordChange(id, "REMOVED", before, null, operator, "摘除数据源");
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("removed", id);
@@ -147,12 +164,13 @@ public class DataSourceAdminController {
     @PostMapping("/{id}/test-connection")
     @BizApi(summary = "测连接（已登记的数据源）：<b>真借一次连接跑 SELECT 1</b>", description = "测连接（已登记的数据源）： 真借一次连接跑 SELECT 1 。", tags = { "z-dms" })
     public ApiResult<ProbeView> testConnection(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_VIEW);
         DataSourceDef def = dataSourceService.find(id);
         if (def == null) {
             throw new IllegalArgumentException("数据源未登记: " + id);
         }
         DataSourceProbeResult probe = dataSourceService.probe(id);
-        String operator = operatorResolver.resolve(request);
+        String operator = permissionService.operatorOf(request);
         auditTrailService.recordUsage(id, ACTION_TEST, operator, probe.isUp(), probe.getDetail(),
                 probe.isUp() ? Long.valueOf(probe.getLatencyMs()) : null);
         return ApiResult.ok(toProbeView(def, probe));
@@ -167,8 +185,9 @@ public class DataSourceAdminController {
     @PostMapping("/test-connection")
     @BizApi(summary = "测连接（<b>未登记的候选</b>，登记表单里的「自测」按钮）", description = "测连接（ 未登记的候选 ，登记表单里的「自测」按钮）： 现场建一个临时池 → 真探一次 → 立刻关掉。 候选 id 只是流水里的标签，不会被登记进注册中心。", tags = { "z-dms" })
     public ApiResult<ProbeView> testCandidate(@RequestBody @BizParam(name = "form", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceForm form, HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_MANAGE);
         DataSourceDef def = toDef(form);
-        String operator = operatorResolver.resolve(request);
+        String operator = permissionService.operatorOf(request);
         DataSourcePool pool = null;
         try {
             pool = poolFactory.create(def);
@@ -193,11 +212,12 @@ public class DataSourceAdminController {
     @PostMapping("/{id}/acquire")
     @BizApi(summary = "取连接（真取一次连接并跑一条 SELECT）：<b>审计流水里的「使用记录」就来自这里</b>", description = "取连接（真取一次连接并跑一条 SELECT）： 审计流水里的「使用记录」就来自这里 。", tags = { "z-dms" })
     public ApiResult<Map<String, Object>> acquire(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, HttpServletRequest request) {
+        gate(request, DmsPermissionPoint.DMS_SOURCE_VIEW);
         DataSourceDef def = dataSourceService.find(id);
         if (def == null) {
             throw new IllegalArgumentException("数据源未登记: " + id);
         }
-        String operator = operatorResolver.resolve(request);
+        String operator = permissionService.operatorOf(request);
         long startNs = System.nanoTime();
         try (Connection conn = dataSourceService.require(id).getConnection();
              Statement st = conn.createStatement();

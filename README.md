@@ -42,7 +42,9 @@ z-dms 就是给第 1、3 套收口的底座 —— **一个 core 两种暴露**�
 
 - **形态 A（嵌入式 starter）**：宿主一行依赖引入即用；
 - **形态 B（组织级 web 管控）**：admin + `_frontend`，集中登记/测连接/授权/审计/变更历史
-  —— **已交付（`TASK-20261012-012`，见下文「形态 B」）**。
+  —— **已交付（`TASK-20261012-012`，见下文「形态 B」）**；
+- **形态 B 增强（本轮）**：权限管控接同集群 z-ctc（4A 中心，**默认开启、可关闭**）+
+  数据浏览（库表结构 / 表数据分页）+ SQL 控制台（真执行、双层写闸、执行留痕）。
 
 > 两种形态**共用同一份 `z-dms-core`**（不是两份代码）：形态 A 的宿主与形态 B 的管控台
 > 建池、探活、换绑、落库走的都是 core 里那套 `DataSourceService`。
@@ -84,6 +86,7 @@ z-dms/
 | `event` | `DataSourceChangeEvent` / `DataSourceChangeListener` / `DataSourceChangePublisher` |
 | `cache` | `DataSourceDefinitionCache`（本地定义缓存） |
 | `service` | `DataSourceService`（登记链：校验 → 建池 → 探活 → 换绑 → 缓存 → 落库 → 广播） |
+| `explorer` | 数据浏览与 SQL 控制台内核（纯 Java 8）：`SchemaExplorer`（元数据浏览，防注入靠「真实拼写解析」）/ `TableDataReader`（分页，列白名单 + 参数化）/ `SqlStatementGuard`（只读闸 / 多语句 / 长度）/ `SqlExecutor`（超时 + 行数截流） |
 
 ---
 
@@ -155,6 +158,9 @@ try (Connection conn = dataSourceService.require("ds-main").getConnection()) {
 | `z.dms.health-path` | 健康端点路径（默认 `/dms/health`） |
 | `z.dms.mist.*` | z-mist 连接与分组（`enabled` / `host` / `port` / `app-name` / `app-secret` / `namespace` / `group`） |
 | `z.dms.config.*` | z-config 推送通道（`enabled` / `publish` / `server-addr` / `namespace` / `group` / `data-id`） |
+| `z.dms.auth.*` | 权限管控（**默认开**）：`enabled` / `ctc-base-url`（4A 中心地址）/ `app-code`（默认 `z-dms`）/ `cache-ttl-ms` |
+| `sso.*` | z-ctc-sso 登录态链路：`ctc-base-url`、`token-cookie-names`；`intercept-paths: []` 把官方拦截器置空（唯一闸门是 DMS-GATE） |
+| `z.dms.console.*` | 数据浏览与 SQL 控制台（admin）：`write-enabled`（默认 false）/ `max-rows` / `timeout-seconds` / `max-sql-length` / `max-page-size` / `history-limit` |
 
 ---
 
@@ -210,9 +216,11 @@ try (Connection conn = dataSourceService.require("ds-main").getConnection()) {
 | `z_dms_datasource_def` | 数据源定义（id / name / type / credential_ref / properties(JSON) / created_at / updated_at） |
 | `z_dms_datasource_change_log` | 变更流水（形态 B 审计面 · V3 补了 `before_value` / `after_value` 两个前后值快照列） |
 | `z_dms_datasource_usage_log` | 使用流水（形态 B 审计面 · 谁在什么时候用了哪个数据源） |
+| `z_dms_sql_history` | SQL 控制台执行历史（形态 B 增强 · V5：原文 / 摘要 / 成败 / 耗时 / 根因） |
 
 DDL 在 `_doc/002_deploy/init/`，**幂等**（`CREATE TABLE IF NOT EXISTS`；V3 对旧表用
 `information_schema` 判列存在再 `PREPARE` 动态 ALTER）：执行两遍无报错。
+另有 `z-dms-permission-points.sql`：z-dms 的 8 个权限点在 4A 中心 `z_ctc_spc_resource` 里的幂等登记脚本。
 
 ---
 
@@ -272,20 +280,83 @@ cd _frontend/z-dms-suit && npm install && npm run build
 
 ### API 一览
 
-| 方法 | 路径 | 用途 |
-|---|---|---|
-| GET | `/api/dms/sources` | 一屏：全部登记数据源 + 各自健康态 |
-| POST | `/api/dms/sources` | 登记（注册即探活） |
-| PUT | `/api/dms/sources/{id}` | 修改（换绑：旧池显式关闭，新池重新探活） |
-| DELETE | `/api/dms/sources/{id}` | 摘除（未登记 ⇒ 报错，不静默成功） |
-| POST | `/api/dms/sources/{id}/test-connection` | 测连接（真发起） |
-| POST | `/api/dms/sources/test-connection` | 测连接（未登记的候选） |
-| POST | `/api/dms/sources/{id}/acquire` | 取连接（产生使用流水） |
-| GET | `/api/dms/changes` | 变更历史（含前后值快照） |
-| GET | `/api/dms/audit` | 审计流水（变更 + 使用） |
-| GET | `/api/dms/credential-refs` | 凭据引用目录（界面下拉候选；**只有引用名，没有口令**） |
+| 方法 | 路径 | 用途 | 权限点 |
+|---|---|---|---|
+| GET | `/api/dms/sources` | 一屏：全部登记数据源 + 各自健康态 | `DMS_SOURCE_VIEW` |
+| POST | `/api/dms/sources` | 登记（注册即探活） | `DMS_SOURCE_MANAGE` |
+| PUT | `/api/dms/sources/{id}` | 修改（换绑：旧池显式关闭，新池重新探活） | `DMS_SOURCE_MANAGE` |
+| DELETE | `/api/dms/sources/{id}` | 摘除（未登记 ⇒ 报错，不静默成功） | `DMS_SOURCE_MANAGE` |
+| POST | `/api/dms/sources/{id}/test-connection` | 测连接（真发起） | `DMS_SOURCE_VIEW` |
+| POST | `/api/dms/sources/test-connection` | 测连接（未登记的候选） | `DMS_SOURCE_MANAGE` |
+| POST | `/api/dms/sources/{id}/acquire` | 取连接（产生使用流水） | `DMS_SOURCE_VIEW` |
+| GET | `/api/dms/changes` | 变更历史（含前后值快照） | `DMS_AUDIT_VIEW` |
+| GET | `/api/dms/audit` | 审计流水（变更 + 使用） | `DMS_AUDIT_VIEW` |
+| GET | `/api/dms/credential-refs` | 凭据引用目录（界面下拉候选；**只有引用名，没有口令**） | `DMS_SOURCE_MANAGE` |
+| GET | `/api/dms/auth/me` | 我的登录态与权限点（未登录也返回，前端判断渲染） | 无（闸门外） |
+| GET | `/api/dms/auth/points` | z-dms 权限点清单（4A 授权对照用） | 无（闸门外） |
+| GET | `/api/dms/explorer/sources` | 可浏览数据源（最小视图：id/name/type） | `DMS_SCHEMA_VIEW` |
+| GET | `/api/dms/explorer/{id}/schemas` | 库清单 | `DMS_SCHEMA_VIEW` |
+| GET | `/api/dms/explorer/{id}/tables` | 表 / 视图清单 | `DMS_SCHEMA_VIEW` |
+| GET | `/api/dms/explorer/{id}/table` | 表结构（字段 / 索引 / 建表语句） | `DMS_SCHEMA_VIEW` |
+| POST | `/api/dms/explorer/{id}/rows` | 表数据分页（筛选 + 排序） | `DMS_DATA_VIEW` |
+| GET | `/api/dms/console/capabilities` | 控制台能力位（写开关 / 上限） | 登录即可 |
+| POST | `/api/dms/console/execute` | 执行一条 SQL（真执行） | `DMS_SQL_EXECUTE`（写另需 `DMS_SQL_WRITE`） |
+| GET | `/api/dms/console/history` | SQL 执行历史 | `DMS_AUDIT_VIEW` |
 
-返回体统一 `{code, data, message}`（`code=200` 成功）。
+返回体统一 `{code, data, message}`（`code=200` 成功；401 未登录 / 403 无权限 / 400 参数与语句问题）。
+
+---
+
+## 🔐 权限管控（同集群 z-ctc · 默认开启 · 可关闭）
+
+> 形态 B 不是谁都能进的。登录态与授权数据走**同集群的 z-ctc（4A 中心）**，
+> 两条链路复用官方 SDK、故障域分开（z-team 已跑通的形态）。
+
+| 链路 | 实现 | 说明 |
+|---|---|---|
+| 登录态（你是谁） | z-ctc-sso `TokenService.verifyToken` | 纯 JWT 验签，不查 4A 的库；`sso.ctc-base-url` 指向 4A 中心即远端验签 |
+| 授权数据（你能干什么） | z-ctc-client `ZCtcClient.listUserPermissions(token, userId)` | 按 `app_code=z-dms` 过滤资源码；**必须转发终端用户 token**（authz 端点被 4A 自己的 SSO 保护） |
+| 401 闸门 | `DmsAuthConfiguration` 的 DMS-GATE（`/api/dms/**`） | 拒绝留痕（URL + IP + 原因，**不记 token**）；官方 `SsoInterceptor` 用 `sso.intercept-paths: []` 置空 —— **两把刀收成一把**，`z.dms.auth.enabled` 才能真正一键关闭 |
+
+**开关与降级纪律**：
+
+- **默认开启**（`z.dms.auth.enabled` 缺省 true）：开启但 `z.dms.auth.ctc-base-url` 为空 ⇒ **启动直接失败**（fail-closed，绝不「看起来开着实际没开」）；
+- **可关闭**：`z.dms.auth.enabled=false` ⇒ 整个 auth 装配消失，退回「X-Operator 头记操作人」的原始口径（本地自检 / 无 4A 孤立环境用）；
+- **三态判定**（照 z-team 的教训）：无权限 ≠ 判定不出来 —— 4A 不可达 ⇒ **按无权限处理且不写缓存**（30s TTL 缓存只缓存成功结果），错误消息如实说「降级」而不是「越权」；
+- token 只活在请求域内存对象里（授权链转发用），**永不进审计流水、日志与响应体**；`?token=` 查询参数刻意不收（会进浏览器历史 / 访问日志，z-ctc TASK-20260924-017 的结论）。
+
+**权限点**（`app_code=z-dms`，登记脚本 `_doc/002_deploy/init/z-dms-permission-points.sql`，幂等）：
+
+| 资源码 | 含义 |
+|---|---|
+| `DMS_GLOBAL_ADMIN` | 全部权限（含写 SQL） |
+| `DMS_SOURCE_VIEW` / `DMS_SOURCE_MANAGE` | 数据源查看 / 管理（登记、修改、摘除、候选测连接） |
+| `DMS_SCHEMA_VIEW` / `DMS_DATA_VIEW` | 库表结构浏览 / 表数据分页 |
+| `DMS_SQL_EXECUTE` / `DMS_SQL_WRITE` | SQL 查询 / 写（写另需服务端开关） |
+| `DMS_AUDIT_VIEW` | 变更历史、审计流水、SQL 执行历史 |
+
+---
+
+## 🖥️ 数据浏览与 SQL 控制台（形态 B 增强）
+
+### 数据浏览（phpMyAdmin 的「结构 + 内容」两屏）
+
+- 选数据源 → 选库 → 选表 → **数据**（分页、点击列头排序、按字段筛选）与**结构**（字段 / 索引 / 建表语句）两个页签；
+- **防注入三件套**：表名先在元数据里解析成**真实拼写**才拼 SQL（`requireTable`，查不到就明确报错）；列名走**白名单**（元数据里查到的才允许进 WHERE / ORDER BY）；筛选值一律 `PreparedStatement` 参数化；
+- MySQL 8 驱动 `databaseTerm=CATALOG` 的坑已处理（库名先按 catalog 查、空了再按 schemaPattern，两套摆法都兼容）；
+- 值统一转展示字符串：二进制 → `<binary N>`，超长 → 截断到 4096 字符（不把 1GB 的 blob 拖进浏览器）。
+
+### SQL 控制台（真执行，不是回显）
+
+| 护栏 | 说明 |
+|---|---|
+| 只读白名单 | 首关键字只放行 `SELECT / SHOW / DESC / DESCRIBE / EXPLAIN / WITH`；`INTO OUTFILE/DUMPFILE`、`FOR UPDATE`、`LOCK/UNLOCK TABLES`、CTE 包写语句一律按 WRITE 拒 |
+| 写双闸 | `z.dms.console.write-enabled=true`（**默认关**）**且**用户持有 `DMS_SQL_WRITE` —— 两道少一道都过不去 |
+| 多语句闸 | 剥注释与字面量后出现第二个语句头 ⇒ 拒 |
+| 超时 / 行数 / 长度 | `setQueryTimeout`（默认 30s）+ `setMaxRows(max+1)`（驱动层截流，截断如实告知）+ 单语句 10000 字符 |
+| 摘要与留痕 | 每次执行写**使用流水**（digest 摘要）+ **执行历史**（`z_dms_sql_history`，原文 + 成败 + 耗时 + 根因），失败也留痕 |
+
+> 闸**分析的替身**（字面量抹成 `?`）只用于判定；真正执行的永远是**用户提交的原始语句**。
 
 ### 凭据纪律在界面上的落点
 

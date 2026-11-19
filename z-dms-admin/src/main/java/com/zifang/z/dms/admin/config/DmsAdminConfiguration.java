@@ -2,7 +2,9 @@ package com.zifang.z.dms.admin.config;
 
 import com.zifang.z.dms.admin.audit.AuditTrailService;
 import com.zifang.z.dms.admin.audit.OperatorResolver;
+import com.zifang.z.dms.admin.console.DmsConsoleProperties;
 import com.zifang.z.dms.admin.store.JdbcChangeLogStore;
+import com.zifang.z.dms.admin.store.JdbcSqlHistoryStore;
 import com.zifang.z.dms.admin.store.JdbcUsageLogStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,6 +37,13 @@ public class DmsAdminConfiguration {
     @Bean
     public JdbcUsageLogStore dmsUsageLogStore(@Qualifier("dmsMetaDataSource") ObjectProvider<DataSource> metaDataSource) {
         return new JdbcUsageLogStore(requireMetaDataSource(metaDataSource));
+    }
+
+    @Bean
+    public JdbcSqlHistoryStore dmsSqlHistoryStore(@Qualifier("dmsMetaDataSource") ObjectProvider<DataSource> metaDataSource,
+                                                  DmsConsoleProperties consoleProps) {
+        return new JdbcSqlHistoryStore(requireMetaDataSource(metaDataSource),
+                consoleProps.getHistoryLimit());
     }
 
     @Bean
