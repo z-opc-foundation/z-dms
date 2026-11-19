@@ -6,15 +6,19 @@ import com.zifang.z.dms.admin.web.dto.ApiResult;
 import com.zifang.z.dms.admin.web.dto.DataSourceForm;
 import com.zifang.z.dms.admin.web.dto.ProbeView;
 import com.zifang.z.dms.admin.web.dto.SourceView;
+import com.zifang.z.dms.core.health.DataSourceHealthProber;
 import com.zifang.z.dms.core.model.DataSourceDef;
 import com.zifang.z.dms.core.model.DataSourceHealthReport;
 import com.zifang.z.dms.core.model.DataSourceProbeResult;
 import com.zifang.z.dms.core.model.DataSourceType;
 import com.zifang.z.dms.core.pool.DataSourcePool;
 import com.zifang.z.dms.core.pool.DataSourcePoolFactory;
-import com.zifang.z.dms.core.health.DataSourceHealthProber;
 import com.zifang.z.dms.core.service.DataSourceService;
 import com.zifang.z.dms.core.service.RegistrationResult;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,7 +28,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -75,6 +78,7 @@ public class DataSourceAdminController {
      * <p>健康态是<b>当场探出来的</b>（逐池真借一次连接跑 SELECT 1），不是缓存里的旧结论。
      */
     @GetMapping
+    @BizApi(summary = "一屏看到全部登记数据源与各自健康态", description = "一屏看到全部登记数据源与各自健康态。 健康态是 当场探出来的 （逐池真借一次连接跑 SELECT 1），不是缓存里的旧结论。", tags = { "z-dms" })
     public ApiResult<List<SourceView>> list() {
         DataSourceHealthReport report = dataSourceService.health();
         Map<String, DataSourceProbeResult> probes = new LinkedHashMap<>();
@@ -90,7 +94,8 @@ public class DataSourceAdminController {
 
     /** 登记一个数据源（注册即探活，探活结论随结果返回）。 */
     @PostMapping
-    public ApiResult<SourceView> register(@RequestBody DataSourceForm form, HttpServletRequest request) {
+    @BizApi(summary = "登记一个数据源（注册即探活，探活结论随结果返回）", description = "登记一个数据源（注册即探活，探活结论随结果返回）。", tags = { "z-dms" })
+    public ApiResult<SourceView> register(@RequestBody @BizParam(name = "form", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceForm form, HttpServletRequest request) {
         DataSourceDef def = toDef(form);
         DataSourceDef before = dataSourceService.find(def.getId());
         RegistrationResult result = dataSourceService.register(def);
@@ -103,7 +108,8 @@ public class DataSourceAdminController {
 
     /** 更新一个已登记的数据源（换绑：旧池显式关闭，新池重新探活）。 */
     @PutMapping("/{id}")
-    public ApiResult<SourceView> update(@PathVariable String id, @RequestBody DataSourceForm form,
+    @BizApi(summary = "更新一个已登记的数据源（换绑：旧池显式关闭，新池重新探活）", description = "更新一个已登记的数据源（换绑：旧池显式关闭，新池重新探活）。", tags = { "z-dms" })
+    public ApiResult<SourceView> update(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, @RequestBody @BizParam(name = "form", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceForm form,
                                         HttpServletRequest request) {
         DataSourceDef def = toDef(form);
         def.setId(id);
@@ -119,7 +125,8 @@ public class DataSourceAdminController {
 
     /** 摘除数据源（显式关闭池）。 */
     @DeleteMapping("/{id}")
-    public ApiResult<Map<String, Object>> remove(@PathVariable String id, HttpServletRequest request) {
+    @BizApi(summary = "摘除数据源（显式关闭池）", description = "摘除数据源（显式关闭池）。", tags = { "z-dms" })
+    public ApiResult<Map<String, Object>> remove(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, HttpServletRequest request) {
         DataSourceDef before = dataSourceService.find(id);
         if (before == null) {
             // 摘除一个不存在的源**不能静默成功**：否则界面会以为删掉了，
@@ -138,7 +145,8 @@ public class DataSourceAdminController {
      * 测连接（已登记的数据源）：<b>真借一次连接跑 SELECT 1</b>。
      */
     @PostMapping("/{id}/test-connection")
-    public ApiResult<ProbeView> testConnection(@PathVariable String id, HttpServletRequest request) {
+    @BizApi(summary = "测连接（已登记的数据源）：<b>真借一次连接跑 SELECT 1</b>", description = "测连接（已登记的数据源）： 真借一次连接跑 SELECT 1 。", tags = { "z-dms" })
+    public ApiResult<ProbeView> testConnection(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, HttpServletRequest request) {
         DataSourceDef def = dataSourceService.find(id);
         if (def == null) {
             throw new IllegalArgumentException("数据源未登记: " + id);
@@ -157,7 +165,8 @@ public class DataSourceAdminController {
      * <p>候选 id 只是流水里的标签，不会被登记进注册中心。
      */
     @PostMapping("/test-connection")
-    public ApiResult<ProbeView> testCandidate(@RequestBody DataSourceForm form, HttpServletRequest request) {
+    @BizApi(summary = "测连接（<b>未登记的候选</b>，登记表单里的「自测」按钮）", description = "测连接（ 未登记的候选 ，登记表单里的「自测」按钮）： 现场建一个临时池 → 真探一次 → 立刻关掉。 候选 id 只是流水里的标签，不会被登记进注册中心。", tags = { "z-dms" })
+    public ApiResult<ProbeView> testCandidate(@RequestBody @BizParam(name = "form", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceForm form, HttpServletRequest request) {
         DataSourceDef def = toDef(form);
         String operator = operatorResolver.resolve(request);
         DataSourcePool pool = null;
@@ -182,7 +191,8 @@ public class DataSourceAdminController {
      * 取连接（真取一次连接并跑一条 SELECT）：<b>审计流水里的「使用记录」就来自这里</b>。
      */
     @PostMapping("/{id}/acquire")
-    public ApiResult<Map<String, Object>> acquire(@PathVariable String id, HttpServletRequest request) {
+    @BizApi(summary = "取连接（真取一次连接并跑一条 SELECT）：<b>审计流水里的「使用记录」就来自这里</b>", description = "取连接（真取一次连接并跑一条 SELECT）： 审计流水里的「使用记录」就来自这里 。", tags = { "z-dms" })
+    public ApiResult<Map<String, Object>> acquire(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, HttpServletRequest request) {
         DataSourceDef def = dataSourceService.find(id);
         if (def == null) {
             throw new IllegalArgumentException("数据源未登记: " + id);
@@ -274,3 +284,6 @@ public class DataSourceAdminController {
                 form.getProperties());
     }
 }
+
+
+

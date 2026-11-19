@@ -1,6 +1,7 @@
 package com.zifang.z.dms.starter.health;
 
 import com.zifang.z.dms.core.service.DataSourceService;
+import com.zifang.z.meta.api.annotation.BizApi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,7 +32,11 @@ public class DmsHealthController {
     }
 
     @GetMapping
+    @BizApi(summary = "health", description = "", tags = { "z-dms" })
     public Map<String, Object> health() {
         return DmsHealthView.toMap(dataSourceService.health());
     }
 }
+
+
+

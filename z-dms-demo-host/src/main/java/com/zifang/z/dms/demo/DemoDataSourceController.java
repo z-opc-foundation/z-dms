@@ -6,6 +6,9 @@ import com.zifang.z.dms.core.pool.DataSourcePool;
 import com.zifang.z.dms.core.service.DataSourceService;
 import com.zifang.z.dms.core.service.RegistrationResult;
 import com.zifang.z.dms.starter.health.DmsHealthView;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,7 +42,8 @@ public class DemoDataSourceController {
 
     /** 登记一个数据源（注册即探活，探活结论随结果返回）。 */
     @PostMapping("/demo/datasources")
-    public Map<String, Object> register(@RequestBody DataSourceDef def) {
+    @BizApi(summary = "登记一个数据源（注册即探活，探活结论随结果返回）", description = "登记一个数据源（注册即探活，探活结论随结果返回）。", tags = { "z-dms" })
+    public Map<String, Object> register(@RequestBody @BizParam(name = "def", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) DataSourceDef def) {
         RegistrationResult result = dataSourceService.register(def);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("definition", result.getDefinition());
@@ -50,12 +54,14 @@ public class DemoDataSourceController {
     }
 
     @GetMapping("/demo/datasources")
+    @BizApi(summary = "list", description = "", tags = { "z-dms" })
     public List<DataSourceDef> list() {
         return dataSourceService.list();
     }
 
     @DeleteMapping("/demo/datasources/{id}")
-    public Map<String, Object> remove(@PathVariable String id) {
+    @BizApi(summary = "remove", description = "", tags = { "z-dms" })
+    public Map<String, Object> remove(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id) {
         dataSourceService.remove(id);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("removed", id);
@@ -67,7 +73,8 @@ public class DemoDataSourceController {
      * 只放行 SELECT（演示面不做写操作闸）。
      */
     @GetMapping("/demo/datasources/{id}/query")
-    public Map<String, Object> query(@PathVariable String id, @RequestParam("sql") String sql) {
+    @BizApi(summary = "只放行 SELECT（演示面不做写操作闸）", description = "宿主内取连接执行查询 ：从 z-dms 登记的池借连接，直接跑一条 SELECT。 只放行 SELECT（演示面不做写操作闸）。", tags = { "z-dms" })
+    public Map<String, Object> query(@PathVariable @BizParam(name = "id", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.PATH) String id, @RequestParam("sql") @BizParam(name = "sql", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String sql) {
         if (!sql.trim().toLowerCase().startsWith("select")) {
             throw new IllegalArgumentException("演示接口只放行 SELECT 语句");
         }
@@ -107,6 +114,7 @@ public class DemoDataSourceController {
      * <b>探活失败在这里看得见</b>（status=DOWN + 每个源的 detail）。
      */
     @GetMapping("/health")
+    @BizApi(summary = "宿主自己的健康端点：并上 z-dms 的健康报告", description = "宿主自己的健康端点：并上 z-dms 的健康报告。 探活失败在这里看得见 （status=DOWN + 每个源的 detail）。", tags = { "z-dms" })
     public Map<String, Object> health() {
         DataSourceHealthReport report = dataSourceService.health();
         Map<String, Object> out = new LinkedHashMap<>();
@@ -115,3 +123,6 @@ public class DemoDataSourceController {
         return out;
     }
 }
+
+
+

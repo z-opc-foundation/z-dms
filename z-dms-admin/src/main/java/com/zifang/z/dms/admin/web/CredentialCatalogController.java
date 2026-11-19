@@ -2,6 +2,7 @@ package com.zifang.z.dms.admin.web;
 
 import com.zifang.z.dms.admin.config.DmsAdminProperties;
 import com.zifang.z.dms.admin.web.dto.ApiResult;
+import com.zifang.z.meta.api.annotation.BizApi;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,7 +27,11 @@ public class CredentialCatalogController {
     }
 
     @GetMapping
+    @BizApi(summary = "list", description = "", tags = { "z-dms" })
     public ApiResult<List<String>> list() {
         return ApiResult.ok(new ArrayList<>(props.getCredentialRefs()));
     }
 }
+
+
+
