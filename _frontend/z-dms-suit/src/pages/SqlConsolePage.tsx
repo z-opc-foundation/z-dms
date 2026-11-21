@@ -4,7 +4,6 @@ import {
   App as AntdApp,
   Button,
   Card,
-  Input,
   Select,
   Space,
   Table,
@@ -13,6 +12,7 @@ import {
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { CaretRightOutlined, HistoryOutlined } from '@ant-design/icons'
+import { ZCodeEditor } from '@yuku123/z-frontend-common/code'
 import { consoleCapabilities, executeSql, listExplorerSources, listSqlHistory } from '../api'
 import type {
   ConsoleCapabilities,
@@ -151,13 +151,12 @@ export default function SqlConsolePage() {
               description="服务端未开启写执行（z.dms.console.write-enabled=false），仅允许 SELECT / SHOW / DESC / EXPLAIN / WITH 查询。"
             />
           )}
-          <Input.TextArea
+          <ZCodeEditor
             value={sql}
-            onChange={(e) => setSql(e.target.value)}
-            rows={8}
+            onChange={setSql}
+            language="sql"
+            height={220}
             placeholder="输入一条 SQL（单语句；查询无需权限说明，写语句需要服务端开关 + 写权限点）"
-            style={{ fontFamily: 'monospace' }}
-            maxLength={caps?.maxSqlLength}
           />
           <Space wrap>
             <Button type="primary" icon={<CaretRightOutlined />} loading={running} onClick={run}>
