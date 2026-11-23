@@ -1,4 +1,5 @@
-import { createRequest } from '@yuku123/z-frontend-common'
+import axios from 'axios'
+import { createRequest, unwrapResponse } from '@yuku123/z-frontend-common'
 import type {
   AuditEntry,
   ChangeRecord,
@@ -29,7 +30,7 @@ import type {
  * { code, data, message } —— 基座的 unwrapResponse 会按 code 解包，
  * code≠200 直接 reject（错误消息在 message 里）。
  */
-const http = createRequest({ baseURL: '/api', timeout: 20000 })
+const http = createRequest({ baseURL: '/api', timeout: 20000, unauthorizedRedirect: '/z-dms/identity' })
 
 http.interceptors.request.use((config: any) => {
   const operator = localStorage.getItem('dmsOperator')
@@ -110,8 +111,31 @@ export function listAudit(datasourceId?: string): Promise<AuditEntry[]> {
 /* ────────────────────────── 权限与登录态 ────────────────────────── */
 
 /** 当前登录态与权限点（未登录也返回 authenticated=false）。 */
-export function fetchMe(): Promise<MeInfo> {
-  return call<MeInfo>(() => http.get('/dms/auth/me'))
+export async function fetchMe(): Promise<MeInfo> {
+  const token = localStorage.getItem('token')
+  const operator = localStorage.getItem('dmsOperator')
+  // 身份探测失败必须留在重试页，不能触发共享客户端的自动退出跳转。
+  const me = await call<MeInfo>(async () => {
+    const response = await axios.get('/api/dms/auth/me', {
+      timeout: 20000,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(operator ? { 'X-Operator': operator } : {}),
+      },
+    })
+    return unwrapResponse(response.data)
+  })
+  if (!me || typeof me.enabled !== 'boolean' || typeof me.authenticated !== 'boolean'
+    || typeof me.degraded !== 'boolean' || !Array.isArray(me.permissions)
+    || !me.permissions.every(permission => typeof permission === 'string')
+    || (me.display != null && typeof me.display !== 'string')
+    || (me.loginUrl != null && typeof me.loginUrl !== 'string')) {
+    throw new Error('权限接口返回的数据不完整')
+  }
+  if (me.loginUrl && !['http:', 'https:'].includes(new URL(me.loginUrl, window.location.href).protocol)) {
+    throw new Error('登录地址不可用')
+  }
+  return me
 }
 
 /** z-dms 权限点清单（4A 中心申请授权时对照）。 */

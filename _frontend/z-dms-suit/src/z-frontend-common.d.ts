@@ -19,9 +19,13 @@ declare module '@yuku123/z-frontend-common' {
     appIcon?: AppIcon
     appUser?: AppUser | null
     loginPath?: string
+    tokenKey?: string
+    userInfoKey?: string
     headerExtra?: ReactNode
     loading?: boolean
   }): ReactElement
+
+  export function unwrapResponse(body: unknown): unknown | Promise<unknown>
 
   export function createRequest(options?: {
     baseURL?: string

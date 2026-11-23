@@ -35,10 +35,10 @@ export default function IdentityPage() {
 
   return (
     <div style={{
-      height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center',
+      minHeight: '100dvh', padding: 16, boxSizing: 'border-box', display: 'flex', justifyContent: 'center', alignItems: 'center',
       background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 50%, #eff6ff 100%)',
     }}>
-      <Card style={{ width: 420, boxShadow: '0 10px 40px rgba(124,58,237,0.12)' }}>
+      <Card style={{ width: '100%', maxWidth: 420, boxShadow: '0 10px 40px rgba(124,58,237,0.12)' }}>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <div style={{
             width: 48, height: 48, borderRadius: 12, margin: '0 auto 12px',
@@ -47,16 +47,12 @@ export default function IdentityPage() {
             color: '#fff', fontSize: 24, fontWeight: 700,
           }}>z</div>
           <div style={{ fontSize: 18, fontWeight: 600, color: '#0f172a' }}>z-dms 数据源管控台</div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>
-            凭据面只有 credentialRef 选择器 · 界面无口令输入框
-          </div>
         </div>
         <Form onFinish={handleSubmit} size="large">
           <Form.Item
             name="operator"
             label="操作人"
-            rules={[{ required: true, message: '请填写操作人' }]}
-            extra="生产环境该身份由平台 SSO / 网关以 X-Operator 头下发，这里只是本地形态的开关"
+            rules={[{ required: true, whitespace: true, message: '请填写操作人' }]}
           >
             <Input prefix={<UserOutlined />} placeholder="例如：admin" />
           </Form.Item>
